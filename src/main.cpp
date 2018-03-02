@@ -8,6 +8,17 @@
 				name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
 				processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
 
+//
+// if we're running on a system with hybrid graphics ... 
+// try to force the selection of the high-performance gpu
+//
+extern "C"
+{
+	__declspec(dllexport) DWORD NvOptimusEnablement = 0x00000001;
+	__declspec(dllexport) int AmdPowerXpressRequestHighPerformance = 1;
+}
+				
+				
 HWND create_window(HINSTANCE, LPCWSTR, int width, int height);
 LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
 
