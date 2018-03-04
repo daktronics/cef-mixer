@@ -2,7 +2,7 @@
 
 
 
-set CEF_ROOT=C:\cef\chromium_git\chromium\src\cef\binary_distrib\cef_binary_3.3325.1742.g5caccda_windows64
+set CEF_ROOT=C:\cef_binary_3.3325.1742.g5caccda_windows64
 
 
 set BASE_DIR=%~dp0

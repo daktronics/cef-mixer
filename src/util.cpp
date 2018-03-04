@@ -96,3 +96,21 @@ int to_int(std::string s, int default_val)
 	}
 	return default_val;
 }
+
+
+//
+// simply resolve a filename to an absolute path using the application
+// directory as the base
+//
+std::shared_ptr<std::string> locate_media(std::string const& filespec)
+{
+	WCHAR basedir[MAX_PATH + 1];
+	GetModuleFileName(nullptr, basedir, MAX_PATH);
+	PathRemoveFileSpec(basedir);
+
+	WCHAR filename[MAX_PATH + 1];
+	auto const utf16 = to_utf16(filespec.c_str());
+	PathCombine(filename, basedir, utf16.c_str());
+
+	return make_shared<string>(to_utf8(filename));
+}

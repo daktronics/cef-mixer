@@ -117,7 +117,7 @@ set(CMAKE_CONFIGURATION_TYPES Debug Release)
 
 # Project name.
 # TODO: Change this line to match your project name when you copy this file.
-project(cef_osr)
+project(cefmixer)
 
 # Use folders in the resulting project files.
 set_property(GLOBAL PROPERTY OS_FOLDERS ON)

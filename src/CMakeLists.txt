@@ -1,4 +1,3 @@
-#project (cef_osr)	
 
 set(ALL_SRCS
 	composition.h
@@ -23,16 +22,23 @@ SET_CEF_TARGET_OUT_DIR()
 include_directories(${_CEF_ROOT})
 
 #indicate the entry point for the executable
-add_executable (cef_osr WIN32 ${ALL_SRCS})
-SET_EXECUTABLE_TARGET_PROPERTIES(cef_osr)
+add_executable (cefmixer WIN32 ${ALL_SRCS})
+SET_EXECUTABLE_TARGET_PROPERTIES(cefmixer)
 
 source_group("src" FILES ${ALL_SRCS})
 
-add_dependencies(cef_osr libcef_dll_wrapper)
+add_dependencies(cefmixer libcef_dll_wrapper)
 
 # Indicate which libraries to include during the link process.
-target_link_libraries (cef_osr d3d11.lib libcef_lib libcef_dll_wrapper)
+target_link_libraries (cefmixer d3d11.lib Shlwapi.lib libcef_lib libcef_dll_wrapper)
 
-COPY_FILES("cef_osr" "${CEF_BINARY_FILES}" "${CEF_BINARY_DIR}" "${TARGET_OUTPUT_DIRECTORY}")
-COPY_FILES("cef_osr" "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${TARGET_OUTPUT_DIRECTORY}")
+COPY_FILES(cefmixer "${CEF_BINARY_FILES}" "${CEF_BINARY_DIR}" "${TARGET_OUTPUT_DIRECTORY}")
+COPY_FILES(cefmixer "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${TARGET_OUTPUT_DIRECTORY}")
+
+# copy our test overlay image to the output directory
+add_custom_command(
+        TARGET cefmixer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/resource/overlay.png
+                ${TARGET_OUTPUT_DIRECTORY}/overlay.png)
   

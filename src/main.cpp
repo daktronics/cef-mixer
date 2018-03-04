@@ -22,6 +22,8 @@ extern "C"
 HWND create_window(HINSTANCE, LPCWSTR, int width, int height);
 LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
 
+
+
 //
 // simple RIAA for CoInitialize/CoUninitialize
 //
@@ -130,12 +132,16 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 			html->move(Anchor::TopLeft, 0.0f, 0.0f, 1.0f, 1.0f);
 		}
 
-		// create a image layer
-		auto const img = create_image_layer(device, "c:\\balloon.jpg");
-		if (img)
+		// create a image layer using a PNG in the application directory
+		auto const overlay = locate_media("overlay.png");
+		if (overlay)
 		{
-			//composition->add_layer(img);
-			//img->move(0.5f, 0.5f, 0.5f, 0.5f);
+			auto const img = create_image_layer(device, *overlay);
+			if (img)
+			{
+				composition->add_layer(img);
+				img->move(Anchor::TopLeft, 0.0f, 0.0f, 1.0f, 1.0f);
+			}
 		}
 
 		// make the window visible now that we have D3D11 components ready
