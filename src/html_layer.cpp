@@ -144,9 +144,10 @@ public:
 
 				shared->unlock_key(sync_key_);
 			}
-			swap_count_ = 0;
-			swapped_.notify_one();
 		}
+
+		swap_count_ = 0;
+		swapped_.notify_one();
 
 		return front;
 	}
