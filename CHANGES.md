@@ -2,7 +2,7 @@
 
 It took a considerable amount of time to figure out all the changes required to update both Chromium and CEF to support 
 offscreen rendering directly to a shared texture.  I thought it would be best to capture everything in a document in case anyone 
-(including myself) wishes to attempt something similar in the future.
+wishes to attempt something similar in the future.
 
 ## Chromium Modifications
 
@@ -67,7 +67,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 		
    3. In **content/browser/offscreen_browser_compositor_output_surface.h**
 	
-      1. Add the shared_texture_enabled flag to the ctor for OffscreenBrowserCompositorOutputSurface
+      1. Add the shared_texture_enabled flag to the ctor for `OffscreenBrowserCompositorOutputSurface`
 		
 		 ```c
 		 OffscreenBrowserCompositorOutputSurface(
@@ -77,13 +77,13 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 		   bool shared_texture_enabled);
 		 ```
 		
-      2. Add the following declaration to OffscreenBrowserCompositorOutputSurface:
+      2. Add the following declaration to `OffscreenBrowserCompositorOutputSurface` :
 	     
 		 ```c
 		 void* GetSharedTexture() const override;
 		 ```
 	
-      3. Add the following members to OffscreenBrowserCompositorOutputSurface
+      3. Add the following members to `OffscreenBrowserCompositorOutputSurface`
 		
 		 ```c
 		 bool shared_texture_enabled_ = false;
