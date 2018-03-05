@@ -4,7 +4,11 @@ A sample application to demonstrate how to use the proposed OnAcceleratedPaint()
 
 # Build Instructions
 
-1. Download CEF and apply the pull request to create a custom build or download an [example binary distribution (x64)][x64_build]
+1. Download CEF and apply the pull request to create a custom build or download an example binary distribution
+    * [x64 sample binary distribution (Release build only)][x64_build]
+    * [x86 sample binary distribution (Release build only)][x86_build]
+    * The above sample distributions are not official builds nor are they supported.  Intended for testing/demo purposes.
+    
 2. From a command prompt set the environment variable CEF_ROOT to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
 
 ```Batchfile
@@ -35,7 +39,7 @@ cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --
 A future update should allow the client application to perform SendBeginFrame by adding a new method to CEF's public interface.
 
 [demo1]: https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png "Cefmixer Demo"
-[x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3325.1745.g0492438_windows64_minimal.7z "X64 Distribution"
-
+[x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3325.1745.g0492438_windows64_minimal.7z "x64 Distribution"
+[x86_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3325.1745.g0492438_windows32_minimal.7z "x86 Distribution"
 
 
