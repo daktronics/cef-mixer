@@ -23,7 +23,7 @@ In addition to to rendering an HTML view off-screen, the demo application will a
 
 The following screenshot was taken when running on a gaming monitor at 144Hz:
 
-[cefmixer_demo](https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png)
+![cefmixer][demo1]
 
 The url can be specified as a command line argument: (width x height for the window size can also be specified)
 
@@ -33,5 +33,8 @@ cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --
 
 # Room for Improvement
 A future update should allow the client application to perform SendBeginFrame.
+
+[demo1]: https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png "Cefmixer Demo"
+
 
 
