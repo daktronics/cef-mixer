@@ -4,7 +4,8 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
 
 # Build Instructions
 
-1. If you don't have it already - install CMake
+1. If you don't have it already - install CMake and Visual Studio 2017
+    * VS 2017 Community Edition is fine - just make sure to install C/C++ development tools
 
 2. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
     * [x64 sample binary distribution (Release build only)][x64_build]
@@ -20,7 +21,9 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
 
 4. Open the build/cefmixer.sln solution in Visual Studio
     * If using one of the sample binary distributions from step 2 - make sure to change the build configuration to Release
+
 5. Build the ALL_BUILD project
+
 6. Run the cefmixer.exe application
 
 # Usage
