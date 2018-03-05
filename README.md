@@ -19,6 +19,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
 ```
 
 4. Open the build/cefmixer.sln solution in Visual Studio
+    * If using one of the sample binary distributions from step 2 - make sure to change the build configuration to Release
 5. Build the ALL_BUILD project
 6. Run the cefmixer.exe application
 
