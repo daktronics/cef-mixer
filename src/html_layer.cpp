@@ -113,7 +113,7 @@ public:
 	// this method will return the texture that should be considered 
 	// the current frame (front)
 	// 
-	shared_ptr<d3d11::Texture2D> swap()
+	shared_ptr<d3d11::Texture2D> swap(shared_ptr<d3d11::Context> const& ctx)
 	{
 		decltype(front_buffer_) front;
 		decltype(back_buffer_) back;
@@ -137,7 +137,9 @@ public:
 		{
 			if (shared->lock_key(0))
 			{
+				d3d11::ScopedBinder<d3d11::Texture2D> texture_binder(ctx, back);
 				back->copy_from(shared);
+
 				shared->unlock_key(0);
 			}
 			swap_count_ = 0;
@@ -231,7 +233,8 @@ public:
 		CefRefPtr<CefBrowser> /*browser*/,
 		PaintElementType type,
 		const RectList& dirtyRects,
-		void* buffer) override
+		void* share_handle, 
+		int64 sync_key) override
 	{
 		frame_++;
 
@@ -251,7 +254,7 @@ public:
 		}
 
 		if (frame_buffer_) {
-			frame_buffer_->on_paint((void*)buffer);
+			frame_buffer_->on_paint((void*)share_handle);
 		}
 	}
 
@@ -277,9 +280,9 @@ public:
 		}
 	}
 
-	shared_ptr<d3d11::Texture2D> texture()
+	shared_ptr<d3d11::Texture2D> texture(shared_ptr<d3d11::Context> const& ctx)
 	{
-		return frame_buffer_->swap();
+		return frame_buffer_->swap(ctx);
 	}
 
 private:
@@ -318,7 +321,7 @@ public:
 		if (view_) 
 		{
 			// simply use the base class method to draw our texture
-			render_texture(ctx, view_->texture());
+			render_texture(ctx, view_->texture(ctx));
 		}
 	}
 
