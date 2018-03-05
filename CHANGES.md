@@ -546,5 +546,272 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 		
 	 to the list of sources under the target gles2_sources
 
+	
+6. Should be able to build the project at this point to make sure everything compiles.
+	 
 	 
 # CEF Modifications
+
+1. In include/cef_render_handler.h add the following new declarations:
+   
+   ```c
+   ///
+   // Called when an view has been rendered to the given shared texture handle.
+   // Currently, the shared handle represents a D3D11 Texture2D that can be
+   // accessed with the OpenSharedResource method available from a ID3D11Device
+   ///
+   virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+                                   PaintElementType type,
+                                  const RectList& dirtyRects,
+                                  void* shared_handle,
+                                  uint64 sync_key) {}
+
+   ///
+   // Called when CEF is to determine if an application can support the
+   // OnAcceleratedPaint method
+   ///
+   virtual bool CanUseAcceleratedPaint(CefRefPtr<CefBrowser> browser) {
+      return false;
+   }
+   ```
+ 
+2. In libcef_dll/ctocpp/render_handler_ctocpp.h add the following declarations:
+
+   ```c
+   void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+           PaintElementType type,
+                          const RectList& dirtyRects,
+                          void* share_handle,
+                          uint64 sync_key) override;
+   bool CanUseAcceleratedPaint(CefRefPtr<CefBrowser> browser) override;
+   ```
+   
+3. In libcef_dll/ctocpp/render_handler_ctocpp.cc add the following implementations:
+
+   ```c
+   void CefRenderHandlerCToCpp::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
+                                                PaintElementType type,
+                                                const RectList& dirtyRects,
+                                                void* share_handle,
+                                                uint64 sync_key) {
+      cef_render_handler_t* _struct = GetStruct();
+      if (CEF_MEMBER_MISSING(_struct, on_accelerated_paint))
+         return;
+
+      // AUTO-GENERATED CONTENT - DELETE THIS COMMENT BEFORE MODIFYING
+
+      // Verify param: browser; type: refptr_diff
+      DCHECK(browser.get());
+      if (!browser.get())
+         return;
+   
+      // Verify param: buffer; type: simple_byaddr
+      DCHECK(share_handle);
+      if (!share_handle)
+         return;
+
+      // Translate param: dirtyRects; type: simple_vec_byref_const
+      const size_t dirtyRectsCount = dirtyRects.size();
+      cef_rect_t* dirtyRectsList = NULL;
+      if (dirtyRectsCount > 0) {
+         dirtyRectsList = new cef_rect_t[dirtyRectsCount];
+         DCHECK(dirtyRectsList);
+         if (dirtyRectsList) {
+            for (size_t i = 0; i < dirtyRectsCount; ++i) {
+               dirtyRectsList[i] = dirtyRects[i];
+            }
+         }
+      }
+
+      // Execute
+      _struct->on_accelerated_paint(_struct, CefBrowserCppToC::Wrap(browser), type,
+                                dirtyRectsCount, dirtyRectsList, share_handle,
+                                sync_key);
+
+      // Restore param:dirtyRects; type: simple_vec_byref_const
+      if (dirtyRectsList)
+         delete[] dirtyRectsList;
+   }
+
+   bool CefRenderHandlerCToCpp::CanUseAcceleratedPaint(
+        CefRefPtr<CefBrowser> browser) {
+      cef_render_handler_t* _struct = GetStruct();
+      if (CEF_MEMBER_MISSING(_struct, can_use_accelerated_paint))
+         return false;
+
+      // AUTO-GENERATED CONTENT - DELETE THIS COMMENT BEFORE MODIFYING
+
+      // Verify param: browser; type: refptr_diff
+      DCHECK(browser.get());
+      if (!browser.get())
+         return false;
+
+      // Execute
+      int _retval = _struct->can_use_accelerated_paint(
+        _struct, CefBrowserCppToC::Wrap(browser));
+
+      // Return type: bool
+      return _retval ? true : false;
+   }
+   ```
+   
+4. In libcef_dll/cpptoc/render_handler_cpptoc.cc add the following implementation
+
+   ```c
+   void CEF_CALLBACK
+         render_handler_on_accelerated_paint(struct _cef_render_handler_t* self,
+                                    cef_browser_t* browser,
+                                    cef_paint_element_type_t type,
+                                    size_t dirtyRectsCount,
+                                    cef_rect_t const* dirtyRects,
+                                    void* share_handle,
+                                    uint64 sync_key) {
+      // AUTO-GENERATED CONTENT - DELETE THIS COMMENT BEFORE MODIFYING
+
+      DCHECK(self);
+      if (!self)
+         return;
+      // Verify param: browser; type: refptr_diff
+      DCHECK(browser);
+      if (!browser)
+         return;
+      // Verify param: dirtyRects; type: simple_vec_byref_const
+      DCHECK(dirtyRectsCount == 0 || dirtyRects);
+      if (dirtyRectsCount > 0 && !dirtyRects)
+         return;
+      // Verify param: buffer; type: simple_byaddr
+      DCHECK(share_handle);
+      if (!share_handle)
+         return;
+
+      // Translate param: dirtyRects; type: simple_vec_byref_const
+      std::vector<CefRect> dirtyRectsList;
+      if (dirtyRectsCount > 0) {
+         for (size_t i = 0; i < dirtyRectsCount; ++i) {
+            CefRect dirtyRectsVal = dirtyRects[i];
+            dirtyRectsList.push_back(dirtyRectsVal);
+         }
+      }
+
+      // Execute
+      CefRenderHandlerCppToC::Get(self)->OnAcceleratedPaint(
+        CefBrowserCToCpp::Wrap(browser), type, dirtyRectsList, share_handle,
+        sync_key);
+   }
+
+   int CEF_CALLBACK
+       render_handler_can_use_accelerated_paint(struct _cef_render_handler_t* self,
+                                         cef_browser_t* browser) {
+      // AUTO-GENERATED CONTENT - DELETE THIS COMMENT BEFORE MODIFYING
+
+      DCHECK(self);
+      if (!self)
+         return 0;
+      // Verify param: browser; type: refptr_diff
+      DCHECK(browser);
+      if (!browser)
+         return 0;
+
+      // Execute
+      bool _retval = CefRenderHandlerCppToC::Get(self)->CanUseAcceleratedPaint(
+         CefBrowserCToCpp::Wrap(browser));
+
+      // Return type: bool
+      return _retval ? 1 : 0;
+   }
+   ```  
+5. In libcef_dll/cpptoc/render_handler_cpptoc.cc initialize the C function pointers
+
+   ```c
+   GetStruct()->on_accelerated_paint = render_handler_on_accelerated_paint;
+   GetStruct()->can_use_accelerated_paint =
+      render_handler_can_use_accelerated_paint;
+   ```
+   
+6. Modify the OSR widget view to enabled shared textures with Chromium in libcef/browser/osr/render_widget_host_view_osr.cc
+
+   1. Before the instance of ui::Compositor is instantiated, add the following:
+   
+      ```c
+	  // ask the application if it can handle OnAcceleratedPaint
+	  bool accelerated_paint = false;
+	  {
+	     CefRefPtr<CefRenderHandler> handler =
+		    browser_impl_->GetClient()->GetRenderHandler();
+		 if (handler.get())
+		    accelerated_paint = handler->CanUseAcceleratedPaint(browser_impl_.get());
+      }
+	  ```
+	  
+   2. Locate the call to SetAcceleratedWidget(compositor_widget_) and replace with the following:
+   
+      ```c
+	  if (accelerated_paint) {
+	     compositor_->SetAcceleratedWidget(gfx::kNullAcceleratedWidget);
+	  } else {
+	     compositor_->SetAcceleratedWidget(compositor_widget_);
+      }
+	  compositor_->EnableSharedTexture(accelerated_paint);
+	  ```
+	  
+	  Telling Chromium to use kNullAcceleratedWidget will force it to use its off-screen FBO.
+	  
+   3. In SubmitCompositorFrame locate where copy_frame_generator_ is instantiated and replace with the following.
+   
+	  We want to skip copy_frame_generator_->GenerateCopyFrame if we have a shared texture.
+    
+      ```c
+	  CefRefPtr<CefRenderHandler> handler =
+        browser_impl_->GetClient()->GetRenderHandler();
+	  if (handler.get()) {
+	     void* shared_texture = nullptr;
+		 ui::Compositor* compositor = GetCompositor();
+         if (compositor) {
+           shared_texture = compositor->GetSharedTexture();
+         }
+ 
+         // Determine the damage rectangle for the current frame. This is the
+         // same calculation that SwapDelegatedFrame uses.
+         viz::RenderPass* root_pass = frame.render_pass_list.back().get();
+         gfx::Size frame_size = root_pass->output_rect.size();
+         gfx::Rect damage_rect =
+            gfx::ToEnclosingRect(gfx::RectF(root_pass->damage_rect));
+         damage_rect.Intersect(gfx::Rect(frame_size));
+
+		 // We would normally call BrowserCompositorMac::SubmitCompositorFrame on
+         // macOS, however it contains compositor resize logic that we don't
+         // want. Consequently we instead call the SwapDelegatedFrame method
+         // directly.
+         GetDelegatedFrameHost()->SubmitCompositorFrame(
+             local_surface_id, std::move(frame),
+             std::move(hit_test_region_list));
+
+         if (shared_texture) {
+            CefRenderHandler::RectList rcList;
+            rcList.push_back(CefRect(damage_rect.x(), damage_rect.y(),
+                                   damage_rect.width(), damage_rect.height()));
+
+            // for now just pass 0 for the sync key since we know that is what
+            // Chromium is using
+            handler->OnAcceleratedPaint(browser_impl_.get(),
+                                      IsPopupWidget() ? PET_POPUP : PET_VIEW,
+                                      rcList, shared_texture, 0);
+         } else {
+            if (!copy_frame_generator_.get()) {
+               copy_frame_generator_.reset(
+                  new CefCopyFrameGenerator(frame_rate_threshold_us_, this));
+            }
+
+            // Request a copy of the last compositor frame which will eventually
+            // call OnPaint asynchronously.
+            copy_frame_generator_->GenerateCopyFrame(damage_rect);
+         }
+      }
+	  ```
+   
+   
+    
+
+
+
+   
