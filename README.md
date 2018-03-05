@@ -29,7 +29,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
 # Usage
 Once the cefmixer.exe is built, it can be run without any arguments - in which case it will automatically navigate to https://webglsamples.org/aquarium/aquarium.html
 
-In addition to to rendering an HTML view off-screen, the demo application will also create an overlay layer using a PNG image file (the DEMO graphic in the screenshots below).
+In addition to to rendering an HTML view off-screen, the demo application will also create an overlay layer using a PNG image file (the red DEMO graphic in the screenshots below).
 
 The following screenshot was taken when running on a gaming monitor at 144Hz:
 
@@ -40,11 +40,11 @@ The url for the HTML layer can be specified as a command line argument: (width x
 ```Batchfile
 cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --width=960 --height=540
 ```
-Pressing Ctrl+V while the application is running can show the HTML view running unthrottled with no v-sync:
+Pressing `Ctrl+V` while the application is running can show the HTML view running unthrottled with no v-sync:
 
 ![VSync Off][demo2]
 
-Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. If the integrating application is doing its own vsync ... then there shouldn't be any other component in the rendering pipeline that is also doing vsync.
+Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. If the integrating application is doing its own v-sync ... then there shouldn't be any other component in the rendering pipeline that is also doing v-sync.  This demo application passes the command-line arg `disable-gpu-vsync` to Chromium.
 
 # Room for Improvement
 A future update could include the following 
