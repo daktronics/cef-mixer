@@ -416,64 +416,64 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 	 }
 	 ```
 		
-  5. In gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc add the following implementations:
+   5. In gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc add the following implementations:
 
-     ```c  
-	 error::Error GLES2DecoderPassthroughImpl::HandleCreateSharedTexture(
+      ```c  
+	  error::Error GLES2DecoderPassthroughImpl::HandleCreateSharedTexture(
+		 uint32_t immediate_data_size,
+		 const volatile void* cmd_data) {
+		 return error::kNoError;
+	  }
+
+	  error::Error GLES2DecoderPassthroughImpl::HandleLockSharedTexture(
 		uint32_t immediate_data_size,
 		const volatile void* cmd_data) {
 		return error::kNoError;
-	 }
+	  }
 
-	 error::Error GLES2DecoderPassthroughImpl::HandleLockSharedTexture(
+	  error::Error GLES2DecoderPassthroughImpl::HandleUnlockSharedTexture(
 		uint32_t immediate_data_size,
 		const volatile void* cmd_data) {
 		return error::kNoError;
-	 }
+	  }
 
-	 error::Error GLES2DecoderPassthroughImpl::HandleUnlockSharedTexture(
+	  error::Error GLES2DecoderPassthroughImpl::HandleDeleteSharedTexture(
 		uint32_t immediate_data_size,
 		const volatile void* cmd_data) {
 		return error::kNoError;
-	 }
-
-	 error::Error GLES2DecoderPassthroughImpl::HandleDeleteSharedTexture(
-		uint32_t immediate_data_size,
-		const volatile void* cmd_data) {
-		return error::kNoError;
-	 }
-     ```
+	  }
+      ```
 	
-  6. In gpu/command_buffer/service/gles2_cmd_decoder.cc add the following implementations
+   6. In gpu/command_buffer/service/gles2_cmd_decoder.cc add the following implementations
 	
-	 ```c
-	 error::Error GLES2DecoderImpl::HandleCreateSharedTexture(
-		uint32_t immediate_data_size,
-		const volatile void* cmd_data) {
-		const volatile gles2::cmds::CreateSharedTexture& c =
+	  ```c
+	  error::Error GLES2DecoderImpl::HandleCreateSharedTexture(
+		 uint32_t immediate_data_size,
+		 const volatile void* cmd_data) {
+		 const volatile gles2::cmds::CreateSharedTexture& c =
 			*static_cast<const volatile gles2::cmds::CreateSharedTexture*>(
 			cmd_data);
-		GLuint texture_id = c.texture_id;
-		uint32_t width = c.width;
-		uint32_t height = c.height;
-		bool syncable = c.syncable;
+		 GLuint texture_id = c.texture_id;
+		 uint32_t width = c.width;
+		 uint32_t height = c.height;
+		 bool syncable = c.syncable;
 		
-		typedef cmds::CreateSharedTexture::Result Result;
-		Result* result_dst = GetSharedMemoryAs<Result*>(
+		 typedef cmds::CreateSharedTexture::Result Result;
+		 Result* result_dst = GetSharedMemoryAs<Result*>(
 			c.result_shm_id, c.result_shm_offset, sizeof(*result_dst));
-		if (!result_dst) {
+		 if (!result_dst) {
 			return error::kOutOfBounds;
-		}
+		 }
 		
-		void* shared_handle = external_texture_manager()->CreateTexture(
+		 void* shared_handle = external_texture_manager()->CreateTexture(
 			texture_id, width, height, syncable, texture_manager());
 			
-		*result_dst = (GLuint64)(shared_handle);		
+		 *result_dst = (GLuint64)(shared_handle);		
 		
-		return error::kNoError;
-	 }
+		 return error::kNoError;
+	  }
 
-     error::Error GLES2DecoderImpl::HandleLockSharedTexture(
+      error::Error GLES2DecoderImpl::HandleLockSharedTexture(
 			uint32_t immediate_data_size,
 			const volatile void* cmd_data) {
 			const volatile gles2::cmds::LockSharedTexture& c =
@@ -485,9 +485,9 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 		external_texture_manager()->LockTexture(handle, key);
 
 		return error::kNoError;
-	 }
+	  }
 
-	 error::Error GLES2DecoderImpl::HandleUnlockSharedTexture(
+	  error::Error GLES2DecoderImpl::HandleUnlockSharedTexture(
 		uint32_t immediate_data_size,
 		const volatile void* cmd_data) {
 		const volatile gles2::cmds::UnlockSharedTexture& c =
@@ -499,9 +499,9 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 		external_texture_manager()->UnlockTexture(handle, key);
 
 		return error::kNoError;
-	 }
+	  }
 
-	 error::Error GLES2DecoderImpl::HandleDeleteSharedTexture(
+	  error::Error GLES2DecoderImpl::HandleDeleteSharedTexture(
 			uint32_t immediate_data_size,
 			const volatile void* cmd_data) {
 			const volatile gles2::cmds::DeleteSharedTexture& c =
@@ -512,28 +512,28 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 		external_texture_manager()->DeleteTexture(handle, texture_manager());
 			
 		return error::kNoError;
-	 }	
+	  }	
 	
 	
-  7. In gpu/command_buffer/service/gles2_cmd_decoder.cc declare a member in GLES2DecoderImpl for ExternalTextureManager:
+   7. In gpu/command_buffer/service/gles2_cmd_decoder.cc declare a member in GLES2DecoderImpl for ExternalTextureManager:
 	
-	 ```c
-	 #include "gpu/command_buffer/service/external_texture_manager.h"
+	  ```c
+	  #include "gpu/command_buffer/service/external_texture_manager.h"
 		
-		...
+	  ...
 	
 	
-	 ExternalTextureManager* external_texture_manager() {
-		if (!external_texture_manager_.get()) {
+	  ExternalTextureManager* external_texture_manager() {
+		 if (!external_texture_manager_.get()) {
 			external_texture_manager_.reset(new gles2::ExternalTextureManager());
-		}
-		return external_texture_manager_.get();
-	 }
+		 }
+		 return external_texture_manager_.get();
+	  }
 
-	 ... 
+	  ... 
 		  
-	 std::unique_ptr<ExternalTextureManager> external_texture_manager_;
-	 ```
+	  std::unique_ptr<ExternalTextureManager> external_texture_manager_;
+	  ```
 
 5. Add source files for ExternalTextureManager to the build
 
@@ -545,3 +545,6 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 	 ```
 		
 	 to the list of sources under the target gles2_sources
+
+	 
+# CEF Modifications
