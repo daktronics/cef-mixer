@@ -38,7 +38,7 @@ Pressing Ctrl+V while the application is running can show the HTML view running 
 
 ![VSync Off][demo2]
 
-Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the application control all timing aspects.
+Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects.
 
 # Room for Improvement
 A future update could include the following 
@@ -48,7 +48,7 @@ A future update could include the following
      * This was attempted originally but ran into issues creating a complete FBO on the Reflector texture
      * Not a big deal for CEF applications, since CEF does not use the Reflector concept in Chromium anyway.
  * Take the Chromium changes directly to the Chromium team
-     * We can get the job done with the patching system built into CEF to apply Chromium changes, but rather the shared texture FBO probably makes more sense as a pull request on Chromium itself.  Seems to make sense that applications that use Headless-mode in Chromium could also benefit from shared textures.
+     * We can get the job done with the patching system built into CEF to apply Chromium changes, but rather the shared texture FBO probably makes more sense as a pull request on Chromium itself.  Seems only reasonable applications that use Headless-mode in Chromium could also benefit from shared textures.
 
 [demo1]: https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png "Cefmixer Demo"
 [demo2]: https://user-images.githubusercontent.com/2717038/36979126-25625fcc-204c-11e8-841d-058d2f53ba91.png "No VSync"
