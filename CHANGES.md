@@ -6,15 +6,17 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 
 ## Chromium Modifications
 
-### 1. Update `ui::Compositor` to allow options to use shared textures
+### 1. Update `ui::Compositor` to allow options for shared textures
 
    ui::Compositor represents the interaction point between CEF and Chromium that we are going to modify to enable and retrieve shared texture information.
    
-   1. In ui/compositor/compositor.h add the following declarations:
+   1. In **ui/compositor/compositor.h** add the following declarations:
       
       1. In existing `class ContextFactoryPrivate` add :
       
-         ```virtual void* GetSharedTexture(ui::Compositor* compositor) = 0;```
+         ```c
+		 virtual void* GetSharedTexture(ui::Compositor* compositor) = 0;
+		 ```
 	 
       2. In existing `class Compositor` add:
 	
@@ -27,34 +29,34 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	     bool shared_texture_enabled_ = false;
 	     ```
 	
-   2. In ui/compositor/compositor.cc add the following implementations:
+   2. In **ui/compositor/compositor.cc** add the following implementations:
 	
 		 ```c
 		 void* Compositor::GetSharedTexture()
 		 {
-			if (context_factory_private_)
-				return context_factory_private_->GetSharedTexture(this);
-			return nullptr;
-		 }
+		    if (context_factory_private_)
+               return context_factory_private_->GetSharedTexture(this);
+            return nullptr;
+         }
 		
 		 void Compositor::EnableSharedTexture(bool enable)
 		 {
-			shared_texture_enabled_ = enable;
+            shared_texture_enabled_ = enable;
 		 }
          ```
 		
-2. Update OffscreenBrowserCompositorOutputSurface to use a shared texture for its FBO
+### 2. Update OffscreenBrowserCompositorOutputSurface to use a shared texture for its FBO
 
    This is the main object used for accelerated off-screen rendering in Chromium.  We're going to modify it so
    it will use a shared d3d11 texture as the color attachment for its FBO.
 
-   1. In content/browser/browser_compositor_output_surface.h add the following declaration to BrowserCompositorOuptutSurface:
+   1. In **content/browser/browser_compositor_output_surface.h** add the following declaration to BrowserCompositorOuptutSurface:
        
 	   ```c
 	   virtual void* GetSharedTexture() const;
        ```	   
 		
-   2. In content/browser/browser_compositor_output_surface.cc add the following implementation:
+   2. In **content/browser/browser_compositor_output_surface.cc** add the following implementation:
    
        ```c
 	   void* BrowserCompositorOuptutSurface::GetSharedTexture() const
@@ -63,7 +65,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	   }
 	   ```
 		
-   3. In content/browser/offscreen_browser_compositor_output_surface.h 
+   3. In **content/browser/offscreen_browser_compositor_output_surface.h**
 	
       1. Add the shared_texture_enabled flag to the ctor for OffscreenBrowserCompositorOutputSurface
 		
@@ -77,7 +79,9 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 		
       2. Add the following declaration to OffscreenBrowserCompositorOutputSurface:
 	     
-		 ```void* GetSharedTexture() const override;```
+		 ```c
+		 void* GetSharedTexture() const override;
+		 ```
 	
       3. Add the following members to OffscreenBrowserCompositorOutputSurface
 		
@@ -87,23 +91,22 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
          uint32_t shared_texture_ = 0;
 		 ```
 
-   4. In content/browser/offscreen_browser_compositor_output_surface.cc 
+   4. In **content/browser/offscreen_browser_compositor_output_surface.cc** 
 	
       1. Add the shared_texture_enabled to the ctor:
 		
          ```c
 		 OffscreenBrowserCompositorOutputSurface::OffscreenBrowserCompositorOutputSurface(
-					scoped_refptr<ui::ContextProviderCommandBuffer> context,
-					const UpdateVSyncParametersCallback& update_vsync_parameters_callback,
-					std::unique_ptr<viz::CompositorOverlayCandidateValidator>
-						overlay_candidate_validator,
-					 bool shared_texture_enabled)
-				: BrowserCompositorOutputSurface(std::move(context),
-					update_vsync_parameters_callback,
-					std::move(overlay_candidate_validator)),
-					shared_texture_enabled_(shared_texture_enabled),
-					weak_ptr_factory_(this) {
-				capabilities_.uses_default_gl_framebuffer = false;
+		        scoped_refptr<ui::ContextProviderCommandBuffer> context,
+				const UpdateVSyncParametersCallback& update_vsync_parameters_callback,
+				std::unique_ptr<viz::CompositorOverlayCandidateValidator> overlay_candidate_validator,
+                bool shared_texture_enabled)
+			: BrowserCompositorOutputSurface(std::move(context),
+				update_vsync_parameters_callback,
+				std::move(overlay_candidate_validator)),
+				shared_texture_enabled_(shared_texture_enabled),
+				weak_ptr_factory_(this) {
+			capabilities_.uses_default_gl_framebuffer = false;
 		 }
 		 ```
 			
@@ -282,15 +285,17 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	     }
 		 ```		
 		 
-3. Update GpuProcessTransportFactory to return the shared texture in use
+### 3. Update GpuProcessTransportFactory to return the shared texture in use
 
-   1. In content/browser/compositor/gpu_process_transport_factory.h add the following declaration:
+   1. In **content/browser/compositor/gpu_process_transport_factory.h** add the following declaration:
 	
       1. In existing GpuProcessTransportFactory:
 		
-         ```void* GetSharedTexture(ui::Compositor* compositor) override;```
+         ```c
+		 void* GetSharedTexture(ui::Compositor* compositor) override;
+		 ```
 			
-   2. In content/browser/compositor/gpu_process_transport_factory.cc add the following:
+   2. In **content/browser/compositor/gpu_process_transport_factory.cc** add the following:
 	
       1. Add the implementation for GetSharedTexture
 		
@@ -321,20 +326,22 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 		 }
 		 ```
 			
-   3. In content/browser/compositor/viz_process_transport_factory.h add the following to VizProcessTransportFactory:
+   3. In **content/browser/compositor/viz_process_transport_factory.h** add the following to VizProcessTransportFactory:
 	
-	  ```void* GetSharedTexture(ui::Compositor*) override;```
+	  ```c
+	  void* GetSharedTexture(ui::Compositor*) override;
+	  ```
 		
-   4. In content/browser/compositor/viz_process_transport_factory.cc add the following implementation:
+   4. In **content/browser/compositor/viz_process_transport_factory.cc** add the following implementation:
 	
 	  ```c
 	  void* VizProcessTransportFactory::GetSharedTexture(ui::Compositor*) {
 	     return nullptr;	
 	  }
 	  
-4. Add new gl commands to create/delete/lock/unlock shared textures
+### 4. Add new gl commands to create/delete/lock/unlock shared textures
 
-   1. In gpu/command_buffer/cmd_buffer_functions.txt add the following declarations
+   1. In **gpu/command_buffer/cmd_buffer_functions.txt** add the following declarations
    
       ```c
       // shared handle extensions
@@ -344,7 +351,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	  GL_APICALL void         GL_APIENTRY glDeleteSharedTexture (GLuint64 shared_handle);
 	  ```
 		
-   2. In gpu/command_buffer/build_gles2_cmd_buffer.py add the following to represent our 4 new commands:
+   2. In **gpu/command_buffer/build_gles2_cmd_buffer.py** add the following to represent our 4 new commands:
 	
 	  ```c
 		'CreateSharedTexture': {
@@ -383,41 +390,43 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 		
    3. From a command prompt run: (current dir should be <chromium>/src/) to generate code for new commands
 	
-	  ```> python gpu/command_buffer/build_gles2_cmd_buffer.py```
+	  ```Batchfile
+	  > python gpu/command_buffer/build_gles2_cmd_buffer.py
+	  ```
 		
-   4. In gpu/command_buffer/client/gles2_implementation.cc add the following implementations:
+   4. In **gpu/command_buffer/client/gles2_implementation.cc** add the following implementations:
 	
-     ```c
-	 GLuint64 GLES2Implementation::CreateSharedTexture(
+      ```c
+	  GLuint64 GLES2Implementation::CreateSharedTexture(
 			GLuint texture_id, GLsizei width, GLsizei height, GLboolean lockable) 
-	 {
-		typedef cmds::CreateSharedTexture::Result Result;
-		Result* result = GetResultAs<Result*>();
-		if (!result) {
+	  {
+		 typedef cmds::CreateSharedTexture::Result Result;
+		 Result* result = GetResultAs<Result*>();
+		 if (!result) {
 			return 0;
-		}
-		*result = 0;
-		helper_->CreateSharedTexture(texture_id, width, height, lockable,
+		 }
+		 *result = 0;
+		 helper_->CreateSharedTexture(texture_id, width, height, lockable,
 			GetResultShmId(), GetResultShmOffset());
 		
-		WaitForCmd();
-		return *result;
-	 }
+		 WaitForCmd();
+		 return *result;
+	  }
 
-	 void GLES2Implementation::LockSharedTexture(GLuint64 shared_handle, GLuint64 key) {
-		helper_->LockSharedTexture(shared_handle, key);
-	 }
+	  void GLES2Implementation::LockSharedTexture(GLuint64 shared_handle, GLuint64 key) {
+		 helper_->LockSharedTexture(shared_handle, key);
+	  }
 
-	 void GLES2Implementation::UnlockSharedTexture(GLuint64 shared_handle, GLuint64 key) {
-		helper_->UnlockSharedTexture(shared_handle, key);
-	 }
+	  void GLES2Implementation::UnlockSharedTexture(GLuint64 shared_handle, GLuint64 key) {
+		 helper_->UnlockSharedTexture(shared_handle, key);
+	  }
 
-	 void GLES2Implementation::DeleteSharedTexture(GLuint64 shared_handle) {
-		helper_->DeleteSharedTexture(shared_handle);
-	 }
-	 ```
+	  void GLES2Implementation::DeleteSharedTexture(GLuint64 shared_handle) {
+		 helper_->DeleteSharedTexture(shared_handle);
+	  }
+	  ```
 		
-   5. In gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc add the following implementations:
+   5. In **gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc** add the following implementations:
 
       ```c  
 	  error::Error GLES2DecoderPassthroughImpl::HandleCreateSharedTexture(
@@ -445,7 +454,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	  }
       ```
 	
-   6. In gpu/command_buffer/service/gles2_cmd_decoder.cc add the following implementations
+   6. In **gpu/command_buffer/service/gles2_cmd_decoder.cc** add the following implementations
 	
 	  ```c
 	  error::Error GLES2DecoderImpl::HandleCreateSharedTexture(
@@ -516,7 +525,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	  }	
 	
 	
-   7. In gpu/command_buffer/service/gles2_cmd_decoder.cc declare a member in GLES2DecoderImpl for ExternalTextureManager:
+   7. In **gpu/command_buffer/service/gles2_cmd_decoder.cc** declare a member in GLES2DecoderImpl for ExternalTextureManager:
 	
 	  ```c
 	  #include "gpu/command_buffer/service/external_texture_manager.h"
@@ -536,9 +545,9 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	  std::unique_ptr<ExternalTextureManager> external_texture_manager_;
 	  ```
 
-5. Add source files for ExternalTextureManager to the build
+### 5. Add source files for ExternalTextureManager to the build
 
-   1. in gpu/command_buffer/service/BUILD.gn add: 
+   1. In **gpu/command_buffer/service/BUILD.gn** add: 
 	
 	 ```
 	 "external_texture_manager.cc",
@@ -548,12 +557,12 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	 to the list of sources under the target gles2_sources
 
 	
-6. Should be able to build the project at this point to make sure everything compiles.
+### 6. Should be able to build the project at this point to make sure everything compiles.
 	 
 	 
 ## CEF Modifications
 
-### 1. In include/cef_render_handler.h add the following new declarations:
+### 1. In **include/cef_render_handler.h** add the following new declarations:
    
    ```c
    ///
@@ -576,7 +585,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
    }
    ```
  
-### 2. In libcef_dll/ctocpp/render_handler_ctocpp.h add the following declarations:
+### 2. In **libcef_dll/ctocpp/render_handler_ctocpp.h** add the following declarations:
 
    ```c
    void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
@@ -587,7 +596,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
    bool CanUseAcceleratedPaint(CefRefPtr<CefBrowser> browser) override;
    ```
    
-### 3. In libcef_dll/ctocpp/render_handler_ctocpp.cc add the following implementations:
+### 3. In **libcef_dll/ctocpp/render_handler_ctocpp.cc** add the following implementations:
 
    ```c
    void CefRenderHandlerCToCpp::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
@@ -656,7 +665,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
    }
    ```
    
-### 4. In libcef_dll/cpptoc/render_handler_cpptoc.cc add the following implementation
+### 4. In **libcef_dll/cpptoc/render_handler_cpptoc.cc** add the following implementation
 
    ```c
    void CEF_CALLBACK
@@ -721,7 +730,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
       return _retval ? 1 : 0;
    }
    ```  
-### 5. In libcef_dll/cpptoc/render_handler_cpptoc.cc initialize the C function pointers
+### 5. In **libcef_dll/cpptoc/render_handler_cpptoc.cc** initialize the C function pointers
 
    ```c
    GetStruct()->on_accelerated_paint = render_handler_on_accelerated_paint;
@@ -729,7 +738,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
       render_handler_can_use_accelerated_paint;
    ```
    
-### 6. Modify the OSR widget view to enabled shared textures with Chromium in libcef/browser/osr/render_widget_host_view_osr.cc
+### 6. Modify the OSR widget view to enabled shared textures with Chromium in **libcef/browser/osr/render_widget_host_view_osr.cc**
 
    1. Before the instance of ui::Compositor is instantiated, add the following:
    
