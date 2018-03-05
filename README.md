@@ -32,7 +32,7 @@ The following screenshot was taken when running on a gaming monitor at 144Hz:
 The url for the HTML layer can be specified as a command line argument: (width x height for the window size are also supported on the command-line)
 
 ```Batchfile
-cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --width=1920 --height=1080
+cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --width=960 --height=540
 ```
 Pressing Ctrl+V while the application is running can show the HTML view running completely unthrottled:
 
