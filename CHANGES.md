@@ -4,10 +4,11 @@ It took a considerable amount of time to figure out all the changes required to 
 offscreen rendering directly to a shared texture.  I thought it would be best to capture everything in a document in case anyone 
 (including myself) wishes to attempt something similar in the future.
 
-# Chromium Modifications
+## Chromium Modifications
 
-1. Update `ui::Compositor` to allow options to use shared textures
-ui::Compositor represents the interaction point between CEF and Chromium that we are going to modify to enable and retrieve shared texture information.
+### 1. Update `ui::Compositor` to allow options to use shared textures
+
+   ui::Compositor represents the interaction point between CEF and Chromium that we are going to modify to enable and retrieve shared texture information.
    
    1. In ui/compositor/compositor.h add the following declarations:
       
@@ -550,9 +551,9 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 6. Should be able to build the project at this point to make sure everything compiles.
 	 
 	 
-# CEF Modifications
+## CEF Modifications
 
-1. In include/cef_render_handler.h add the following new declarations:
+### 1. In include/cef_render_handler.h add the following new declarations:
    
    ```c
    ///
@@ -575,7 +576,7 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
    }
    ```
  
-2. In libcef_dll/ctocpp/render_handler_ctocpp.h add the following declarations:
+### 2. In libcef_dll/ctocpp/render_handler_ctocpp.h add the following declarations:
 
    ```c
    void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
@@ -586,7 +587,7 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
    bool CanUseAcceleratedPaint(CefRefPtr<CefBrowser> browser) override;
    ```
    
-3. In libcef_dll/ctocpp/render_handler_ctocpp.cc add the following implementations:
+### 3. In libcef_dll/ctocpp/render_handler_ctocpp.cc add the following implementations:
 
    ```c
    void CefRenderHandlerCToCpp::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
@@ -655,7 +656,7 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
    }
    ```
    
-4. In libcef_dll/cpptoc/render_handler_cpptoc.cc add the following implementation
+### 4. In libcef_dll/cpptoc/render_handler_cpptoc.cc add the following implementation
 
    ```c
    void CEF_CALLBACK
@@ -720,7 +721,7 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
       return _retval ? 1 : 0;
    }
    ```  
-5. In libcef_dll/cpptoc/render_handler_cpptoc.cc initialize the C function pointers
+### 5. In libcef_dll/cpptoc/render_handler_cpptoc.cc initialize the C function pointers
 
    ```c
    GetStruct()->on_accelerated_paint = render_handler_on_accelerated_paint;
@@ -728,7 +729,7 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
       render_handler_can_use_accelerated_paint;
    ```
    
-6. Modify the OSR widget view to enabled shared textures with Chromium in libcef/browser/osr/render_widget_host_view_osr.cc
+### 6. Modify the OSR widget view to enabled shared textures with Chromium in libcef/browser/osr/render_widget_host_view_osr.cc
 
    1. Before the instance of ui::Compositor is instantiated, add the following:
    
@@ -808,6 +809,17 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
          }
       }
 	  ```
+
+### 7. We can now re-build with the CEF changes
+
+### 8. Create a distribution for integration into an application
+
+    A useful command for partial distributions (e.g. if you just have a Debug build) :
+    
+	```Batchfile
+	src/cef/tools/make_distrib.bat --x64-build --ninja-build --no-archive --allow-partial --minimal
+	```
+	
    
    
     
