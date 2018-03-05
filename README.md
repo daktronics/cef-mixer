@@ -1,10 +1,10 @@
 # CEF Offscreen-Rendering (OSR) Mixer Demo
 
-A sample application to demonstrate how to use the proposed OnAcceleratedPaint() callback when using CEF for HTML off-screen rendering.  This application uses [pull request 158][pull_request_158] for CEF which improves the OSR rendering performance.
+A sample application to demonstrate how to use the proposed OnAcceleratedPaint() callback when using CEF for HTML off-screen rendering.  This application uses [pull request 158][pr158] for CEF which improves the OSR rendering performance.
 
 # Build Instructions
 
-1. Download CEF and apply the [pull request][pull_request_158] to create a custom build or download an example binary distribution
+1. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
     * [x64 sample binary distribution (Release build only)][x64_build]
     * [x86 sample binary distribution (Release build only)][x86_build]
     * The above sample distributions are not supported official builds - they are intended for testing/demo purposes.
@@ -54,5 +54,5 @@ A future update could include the following
 [demo2]: https://user-images.githubusercontent.com/2717038/36979126-25625fcc-204c-11e8-841d-058d2f53ba91.png "No VSync"
 [x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3325.1745.g0492438_windows64_minimal.7z "x64 Distribution"
 [x86_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3325.1745.g0492438_windows32_minimal.7z "x86 Distribution"
-[pull request 158]: https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff
+[pr158]: https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff "Pull Request"
 
