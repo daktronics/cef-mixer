@@ -22,9 +22,9 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
 4. Open the build/cefmixer.sln solution in Visual Studio
     * If using one of the sample binary distributions from step 2 - make sure to change the build configuration to Release
 
-5. Build the ALL_BUILD project
+5. Build the **ALL_BUILD** project
 
-6. Run the cefmixer.exe application
+6. Run the **cefmixer.exe** application
 
 # Usage
 Once the cefmixer.exe is built, it can be run without any arguments - in which case it will automatically navigate to https://webglsamples.org/aquarium/aquarium.html
