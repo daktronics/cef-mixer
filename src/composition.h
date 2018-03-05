@@ -3,15 +3,6 @@
 #include "d3d11.h"
 #include <vector>
 
-enum class Anchor
-{
-	TopLeft,
-	TopRight,
-	Center,
-	BottomLeft,
-	BottomRight
-};
-
 //
 // a simple abstraction for a 2D layer within a composition
 // 
@@ -23,18 +14,18 @@ public:
 	Layer(std::shared_ptr<d3d11::Device> const& device, bool flip);
 	~Layer();
 
-	virtual void move(Anchor anchor, float x, float y, float width, float height);	
+	virtual void move(float x, float y, float width, float height);	
 	virtual void render() = 0;
 
 protected:
 
 	void render_texture(std::shared_ptr<d3d11::Texture2D> const&);
 
-	bool _flip;
+	bool flip_;
 
-	std::shared_ptr<d3d11::Geometry> _geometry;
-	std::shared_ptr<d3d11::Effect> _effect;
-	std::shared_ptr<d3d11::Device> const _device;
+	std::shared_ptr<d3d11::Geometry> geometry_;
+	std::shared_ptr<d3d11::Effect> effect_;
+	std::shared_ptr<d3d11::Device> const device_;
 };
 
 
@@ -52,8 +43,8 @@ public:
 
 private:
 
-	std::shared_ptr<d3d11::Device> const _device;
-	std::vector<std::shared_ptr<Layer>> _layers;
+	std::shared_ptr<d3d11::Device> const device_;
+	std::vector<std::shared_ptr<Layer>> layers_;
 };
 
 int cef_initialize(HINSTANCE);

@@ -36,40 +36,40 @@ namespace d3d11 {
 				ID3D11RenderTargetView* rtv,
 				ID3D11SamplerState* sampler,
 				ID3D11BlendState* blender)
-		: _sampler(to_com_ptr<ID3D11SamplerState>(sampler))
-		, _blender(to_com_ptr<ID3D11BlendState>(blender))
-		, _swapchain(shared_ptr<IDXGISwapChain>(swapchain, [](IDXGISwapChain* p) { if (p) p->Release(); }))
-		, _rtv(shared_ptr<ID3D11RenderTargetView>(rtv, [](ID3D11RenderTargetView* p) { if (p) p->Release(); }))
-		, _ctx(ctx)
+		: sampler_(to_com_ptr<ID3D11SamplerState>(sampler))
+		, blender_(to_com_ptr<ID3D11BlendState>(blender))
+		, swapchain_(to_com_ptr<IDXGISwapChain>(swapchain))
+		, rtv_(to_com_ptr<ID3D11RenderTargetView>(rtv))
+		, ctx_(ctx)
 	{
 	}
 
 	void SwapChain::clear(float red, float green, float blue, float alpha)
 	{
-		ID3D11RenderTargetView* rtv[1] = { _rtv.get() };
-		_ctx->OMSetRenderTargets(1, rtv, nullptr);
+		ID3D11RenderTargetView* rtv[1] = { rtv_.get() };
+		ctx_->OMSetRenderTargets(1, rtv, nullptr);
 
 		// set default blending state
-		if (_blender) 
+		if (blender_)
 		{
 			float factor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-			_ctx->OMSetBlendState(_blender.get(), factor, 0xffffffff);
+			ctx_->OMSetBlendState(blender_.get(), factor, 0xffffffff);
 		}
 
 		// set default sampler state
-		if (_sampler)
+		if (sampler_)
 		{
-			ID3D11SamplerState* samplers[1] = { _sampler.get() };
-			_ctx->PSSetSamplers(0, 1, samplers);
+			ID3D11SamplerState* samplers[1] = { sampler_.get() };
+			ctx_->PSSetSamplers(0, 1, samplers);
 		}
 
 		FLOAT color[4] = { red, green, blue, alpha };
-		_ctx->ClearRenderTargetView(_rtv.get(), color);
+		ctx_->ClearRenderTargetView(rtv_.get(), color);
 	}
 
 	void SwapChain::present(int sync_interval)
 	{
-		_swapchain->Present(sync_interval, 0);
+		swapchain_->Present(sync_interval, 0);
 	}
 
 	void SwapChain::resize(int width, int height)
@@ -81,18 +81,18 @@ namespace d3d11 {
 		ID3D11VertexShader* vsh,
 		ID3D11PixelShader* psh,
 		ID3D11InputLayout* layout)
-		: _vsh(shared_ptr<ID3D11VertexShader>(vsh, [](ID3D11VertexShader* p) { if (p) p->Release(); }))
-		, _psh(shared_ptr<ID3D11PixelShader>(psh, [](ID3D11PixelShader* p) { if (p) p->Release(); }))
-		, _layout(shared_ptr<ID3D11InputLayout>(layout, [](ID3D11InputLayout* p) { if (p) p->Release(); }))
-		, _ctx(ctx)
+		: vsh_(to_com_ptr<ID3D11VertexShader>(vsh))
+		, psh_(to_com_ptr<ID3D11PixelShader>(psh))
+		, layout_(to_com_ptr<ID3D11InputLayout>(layout))
+		, ctx_(ctx)
 	{
 	}
 
 	void Effect::bind()
 	{
-		_ctx->IASetInputLayout(_layout.get());
-		_ctx->VSSetShader(_vsh.get(), nullptr, 0);
-		_ctx->PSSetShader(_psh.get(), nullptr, 0);
+		ctx_->IASetInputLayout(layout_.get());
+		ctx_->VSSetShader(vsh_.get(), nullptr, 0);
+		ctx_->PSSetShader(psh_.get(), nullptr, 0);
 	}
 
 	void Effect::unbind()
@@ -105,11 +105,11 @@ namespace d3d11 {
 			uint32_t vertices,
 			uint32_t stride,
 			ID3D11Buffer* buffer)
-		: _primitive(primitive)
-		, _vertices(vertices)
-		, _stride(stride)
-		, _buffer(shared_ptr<ID3D11Buffer>(buffer, [](ID3D11Buffer* p) { if (p) p->Release(); }))
-		, _ctx(ctx)
+		: primitive_(primitive)
+		, vertices_(vertices)
+		, stride_(stride)
+		, buffer_(to_com_ptr<ID3D11Buffer>(buffer))
+		, ctx_(ctx)
 	{
 	}
 
@@ -118,9 +118,9 @@ namespace d3d11 {
 		// todo: handle offset
 		uint32_t offset = 0;
 
-		ID3D11Buffer* buffers[1] = { _buffer.get() };
-		_ctx->IASetVertexBuffers(0, 1, buffers, &_stride, &offset);
-		_ctx->IASetPrimitiveTopology(_primitive);
+		ID3D11Buffer* buffers[1] = { buffer_.get() };
+		ctx_->IASetVertexBuffers(0, 1, buffers, &stride_, &offset);
+		ctx_->IASetPrimitiveTopology(primitive_);
 	}
 
 	void Geometry::unbind()
@@ -130,7 +130,7 @@ namespace d3d11 {
 	void Geometry::draw()
 	{
 		// todo: handle offset
-		_ctx->Draw(_vertices, 0);
+		ctx_->Draw(vertices_, 0);
 	}
 
 	
@@ -138,14 +138,14 @@ namespace d3d11 {
 		std::shared_ptr<ID3D11DeviceContext> const& ctx,
 		ID3D11Texture2D* tex,
 		ID3D11ShaderResourceView* srv)
-		: _texture(shared_ptr<ID3D11Texture2D>(tex, [](ID3D11Texture2D* p) { if (p) p->Release(); }))
-		, _srv(shared_ptr<ID3D11ShaderResourceView>(srv, [](ID3D11ShaderResourceView* p) { if (p) p->Release(); }))
-		, _ctx(ctx)
+		: texture_(to_com_ptr<ID3D11Texture2D>(tex))
+		, srv_(to_com_ptr<ID3D11ShaderResourceView>(srv))
+		, ctx_(ctx)
 	{
 		share_handle_ = nullptr;
 
 		IDXGIResource* res = nullptr;
-		if (SUCCEEDED(_texture->QueryInterface(
+		if (SUCCEEDED(texture_->QueryInterface(
 			__uuidof(IDXGIResource), reinterpret_cast<void**>(&res))))
 		{
 			res->GetSharedHandle(&share_handle_);
@@ -157,28 +157,28 @@ namespace d3d11 {
 	uint32_t Texture2D::width() const
 	{
 		D3D11_TEXTURE2D_DESC desc;
-		_texture->GetDesc(&desc);
+		texture_->GetDesc(&desc);
 		return desc.Width;
 	}
 
 	uint32_t Texture2D::height() const
 	{
 		D3D11_TEXTURE2D_DESC desc;
-		_texture->GetDesc(&desc);
+		texture_->GetDesc(&desc);
 		return desc.Height;
 	}
 
 	DXGI_FORMAT Texture2D::format() const
 	{
 		D3D11_TEXTURE2D_DESC desc;
-		_texture->GetDesc(&desc);
+		texture_->GetDesc(&desc);
 		return desc.Format;
 	}
 
 	bool Texture2D::lock_key(uint64_t key)
 	{
 		IDXGIKeyedMutex* mutex = nullptr;
-		if (SUCCEEDED(_texture->QueryInterface(__uuidof(IDXGIKeyedMutex), (void**)&mutex)))
+		if (SUCCEEDED(texture_->QueryInterface(__uuidof(IDXGIKeyedMutex), (void**)&mutex)))
 		{
 			auto const hr = mutex->AcquireSync(key, INFINITE);
 			mutex->Release();
@@ -190,7 +190,7 @@ namespace d3d11 {
 	void Texture2D::unlock_key(uint64_t key)
 	{
 		IDXGIKeyedMutex* mutex = nullptr;
-		if (SUCCEEDED(_texture->QueryInterface(__uuidof(IDXGIKeyedMutex), (void**)&mutex)))
+		if (SUCCEEDED(texture_->QueryInterface(__uuidof(IDXGIKeyedMutex), (void**)&mutex)))
 		{
 			mutex->ReleaseSync(key);
 			mutex->Release();		
@@ -199,10 +199,10 @@ namespace d3d11 {
 
 	void Texture2D::bind()
 	{
-		if (_srv)
+		if (srv_)
 		{
-			ID3D11ShaderResourceView* views[1] = { _srv.get() };
-			_ctx->PSSetShaderResources(0, 1, views);		
+			ID3D11ShaderResourceView* views[1] = { srv_.get() };
+			ctx_->PSSetShaderResources(0, 1, views);
 		}
 	}
 
@@ -218,15 +218,15 @@ namespace d3d11 {
 	void Texture2D::copy_from(std::shared_ptr<Texture2D> const& other)
 	{
 		if (other) {
-			_ctx->CopyResource(_texture.get(), other->_texture.get());
+			ctx_->CopyResource(texture_.get(), other->texture_.get());
 		}
 	}
 
 
 	Device::Device(ID3D11Device* pdev, ID3D11DeviceContext* pctx)
-		: _device(shared_ptr<ID3D11Device>(pdev, [](ID3D11Device* p) { if (p) p->Release(); }))
+		: _device(to_com_ptr<ID3D11Device>(pdev))
 		, ctx_(make_shared<Context>(pctx))
-		, _ctx(shared_ptr<ID3D11DeviceContext>(pctx, [](ID3D11DeviceContext* p) { if (p) p->Release(); }))
+		, _ctx(to_com_ptr<ID3D11DeviceContext>(pctx))
 	{
 		_lib_compiler = LoadLibrary(L"d3dcompiler_47.dll");
 	}

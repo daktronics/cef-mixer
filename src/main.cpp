@@ -22,7 +22,9 @@ extern "C"
 HWND create_window(HINSTANCE, LPCWSTR, int width, int height);
 LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
 
+#define ID_WINDOW_VSYNC 100
 
+int sync_interval_ = 1;
 
 //
 // simple RIAA for CoInitialize/CoUninitialize
@@ -129,7 +131,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		if (html)
 		{
 			composition->add_layer(html);
-			html->move(Anchor::TopLeft, 0.0f, 0.0f, 1.0f, 1.0f);
+			html->move(0.0f, 0.0f, 1.0f, 1.0f);
 		}
 
 		// create a image layer using a PNG in the application directory
@@ -140,7 +142,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 			if (img)
 			{
 				composition->add_layer(img);
-				img->move(Anchor::TopLeft, 0.0f, 0.0f, 1.0f, 1.0f);
+				img->move(0.0f, 0.0f, 1.0f, 1.0f);
 			}
 		}
 
@@ -150,16 +152,24 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		auto fps_start = time_now();
 		uint32_t frame = 0;
 
+		ACCEL accelerators[1];
+		accelerators[0].cmd = ID_WINDOW_VSYNC;
+		accelerators[0].fVirt = FCONTROL | FVIRTKEY;
+		accelerators[0].key = static_cast<WORD>('V');
+		HACCEL accel_table = CreateAcceleratorTable(
+			accelerators, sizeof(accelerators) / sizeof(accelerators[0]));
+
 		// main message pump for our application
 		MSG msg = {};
 		while (msg.message != WM_QUIT)
 		{
-			//cef_do_message_work();
-
 			if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 			{
-				TranslateMessage(&msg);
-				DispatchMessage(&msg);
+				if (!TranslateAccelerator(window, accel_table, &msg))
+				{
+					TranslateMessage(&msg);
+					DispatchMessage(&msg);
+				}
 			}
 			else
 			{
@@ -170,7 +180,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				composition->render();
 
 				// present to window
-				swapchain->present(1);
+				swapchain->present(sync_interval_);
 
 				frame++;
 				auto const now = time_now();
@@ -181,8 +191,6 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 					frame = 0;
 					fps_start = time_now();
 				}
-
-				//Sleep(2);
 			}
 		}
 	}
@@ -243,6 +251,12 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 				PAINTSTRUCT ps;
 				BeginPaint(hwnd, &ps);
 				EndPaint(hwnd, &ps);
+			}
+			break;
+
+		case WM_COMMAND:
+			if (LOWORD(wparam) == ID_WINDOW_VSYNC) {
+				sync_interval_ = sync_interval_ ? 0 : 1;
 			}
 			break;
 

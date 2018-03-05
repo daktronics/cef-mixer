@@ -16,13 +16,13 @@ namespace d3d11 {
 	{
 	public:
 		ScopedBinder(std::shared_ptr<T> const& target)
-			: _target(target)
+			: target_(target)
 		{
-			if (_target) { _target->bind(); }
+			if (target_) { target_->bind(); }
 		}
-		~ScopedBinder() { if (_target) { _target->unbind(); } }
+		~ScopedBinder() { if (target_) { target_->unbind(); } }
 	private:
-		std::shared_ptr<T> const _target;
+		std::shared_ptr<T> const target_;
 	};
 
 	class Context
@@ -104,11 +104,11 @@ namespace d3d11 {
 
 	private:
 		
-		std::shared_ptr<ID3D11SamplerState> const _sampler;
-		std::shared_ptr<ID3D11BlendState> const _blender;
-		std::shared_ptr<IDXGISwapChain> const _swapchain;
-		std::shared_ptr<ID3D11RenderTargetView> const _rtv;
-		std::shared_ptr<ID3D11DeviceContext> const _ctx;
+		std::shared_ptr<ID3D11SamplerState> const sampler_;
+		std::shared_ptr<ID3D11BlendState> const blender_;
+		std::shared_ptr<IDXGISwapChain> const swapchain_;
+		std::shared_ptr<ID3D11RenderTargetView> const rtv_;
+		std::shared_ptr<ID3D11DeviceContext> const ctx_;
 	};
 
 	class Texture2D
@@ -136,9 +136,9 @@ namespace d3d11 {
 
 		HANDLE share_handle_;
 		
-		std::shared_ptr<ID3D11Texture2D> const _texture;
-		std::shared_ptr<ID3D11ShaderResourceView> const _srv;
-		std::shared_ptr<ID3D11DeviceContext> const _ctx;
+		std::shared_ptr<ID3D11Texture2D> const texture_;
+		std::shared_ptr<ID3D11ShaderResourceView> const srv_;
+		std::shared_ptr<ID3D11DeviceContext> const ctx_;
 	};
 
 	class Effect
@@ -154,10 +154,10 @@ namespace d3d11 {
 
 	private:
 
-		std::shared_ptr<ID3D11VertexShader> const _vsh;
-		std::shared_ptr<ID3D11PixelShader> const _psh;
-		std::shared_ptr<ID3D11InputLayout> const _layout;
-		std::shared_ptr<ID3D11DeviceContext> const _ctx;
+		std::shared_ptr<ID3D11VertexShader> const vsh_;
+		std::shared_ptr<ID3D11PixelShader> const psh_;
+		std::shared_ptr<ID3D11InputLayout> const layout_;
+		std::shared_ptr<ID3D11DeviceContext> const ctx_;
 	};
 
 
@@ -176,11 +176,11 @@ namespace d3d11 {
 
 	private:
 
-		D3D_PRIMITIVE_TOPOLOGY _primitive;
-		uint32_t _vertices;
-		uint32_t _stride;
-		std::shared_ptr<ID3D11Buffer> const _buffer;
-		std::shared_ptr<ID3D11DeviceContext> const _ctx;
+		D3D_PRIMITIVE_TOPOLOGY primitive_;
+		uint32_t vertices_;
+		uint32_t stride_;
+		std::shared_ptr<ID3D11Buffer> const buffer_;
+		std::shared_ptr<ID3D11DeviceContext> const ctx_;
 	};
 
 

@@ -3,8 +3,8 @@
 using namespace std;
 
 Layer::Layer(std::shared_ptr<d3d11::Device> const& device, bool flip)
-	: _device(device)
-	, _flip(flip)
+	: device_(device)
+	, flip_(flip)
 {
 }
 
@@ -12,21 +12,11 @@ Layer::~Layer()
 {
 }
 
-void Layer::move(Anchor anchor, float x, float y, float width, float height)
-{
-	switch (anchor)
-	{
-		case Anchor::Center:
-			x = x - (width / 2.0f);
-			y = y - (height / 2.0f);
-			break;
-			
-		default : break;
-	}	
-	
+void Layer::move(float x, float y, float width, float height)
+{	
 	// obviously, it is not efficient to create the quad everytime we
 	// move ... but for now we're just trying to get something on-screen
-	_geometry = _device->create_quad(x, y, width, height, _flip);
+	geometry_ = device_->create_quad(x, y, width, height, flip_);
 }
 
 //
@@ -34,33 +24,33 @@ void Layer::move(Anchor anchor, float x, float y, float width, float height)
 //
 void Layer::render_texture(shared_ptr<d3d11::Texture2D> const& texture)
 {
-	if (_geometry && texture)
+	if (geometry_ && texture)
 	{
 		// we need a shader
-		if (!_effect) {
-			_effect = _device->create_default_effect();
+		if (!effect_) {
+			effect_ = device_->create_default_effect();
 		}
 
 		// bind our states/resource to the pipeline
-		d3d11::ScopedBinder<d3d11::Geometry> quad_binder(_geometry);
-		d3d11::ScopedBinder<d3d11::Effect> fx_binder(_effect);
+		d3d11::ScopedBinder<d3d11::Geometry> quad_binder(geometry_);
+		d3d11::ScopedBinder<d3d11::Effect> fx_binder(effect_);
 		d3d11::ScopedBinder<d3d11::Texture2D> tex_binder(texture);
 
 		// actually draw the quad
-		_geometry->draw();
+		geometry_->draw();
 	}
 }
 
 
 Composition::Composition(std::shared_ptr<d3d11::Device> const& device)
-	: _device(device)
+	: device_(device)
 {
 }
 
 void Composition::add_layer(std::shared_ptr<Layer> const& layer)
 {
 	if (layer) {
-		_layers.push_back(layer);
+		layers_.push_back(layer);
 	}
 }
 
@@ -68,7 +58,7 @@ void Composition::render()
 {
 	// pretty simple ... just use painter's algorithm and render 
 	// our layers in order (not doing any depth or 3D here)
-	for (auto const& layer : _layers) {
+	for (auto const& layer : layers_) {
 		layer->render();
 	}
 }
