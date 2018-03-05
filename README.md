@@ -41,7 +41,7 @@ Pressing Ctrl+V while the application is running can show the HTML view running 
 
 ![VSync Off][demo2]
 
-Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects.
+Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. If the integrating application is doing its own vsync ... then there shouldn't be any other component in the rendering pipeline that is also doing vsync.
 
 # Room for Improvement
 A future update could include the following 
