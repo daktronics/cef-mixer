@@ -6,42 +6,15 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 
 # Chromium Modifications
 
-1. Update ui::Compositor to allow options to use shared textures
-
+1. Update `ui::Compositor` to allow options to use shared textures
 ui::Compositor represents the interaction point between CEF and Chromium that we are going to modify to enable and retrieve shared texture information.
    
-    1. in ui/compositor/compositor.h add the following declarations:
-   
-		    1. in existing `class ContextFactoryPrivate` add :
+1. in ui/compositor/compositor.h add the following declarations:
+        
+	1. in existing `class ContextFactoryPrivate` add :
 	  
-			  `virtual void* GetSharedTexture(ui::Compositor* compositor) = 0;`
+	`virtual void* GetSharedTexture(ui::Compositor* compositor) = 0;`
 			
-		ii) in existing class Compositor:
-		
-			void* GetSharedTexture();
-			
-			void EnableSharedTexture(bool enable);
-			bool shared_texture_enabled() const{
-				return shared_texture_enabled_;
-			}
-			
-			bool shared_texture_enabled_ = false;
-		
-	b) in ui/compositor/compositor.cc add the following implementations:
-	
-		void* Compositor::GetSharedTexture()
-		{
-			if (context_factory_private_)
-				return context_factory_private_->GetSharedTexture(this);
-			return nullptr;
-		}
-		
-		void Compositor::EnableSharedTexture(bool enable)
-		{
-			shared_texture_enabled_ = enable;
-		}
-
-
 
 # Build and Update Chromium
 
