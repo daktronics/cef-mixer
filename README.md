@@ -8,7 +8,7 @@ A sample application to demonstrate how to use the proposed OnAcceleratedPaint()
 2. From a command prompt set the environment variable CEF_ROOT to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
 
 ```Batchfile
-> set CEF_ROOT="<path\to\cef\binary-distribution>"
+> set CEF_ROOT=<path\to\cef\binary-distribution>
 > gen_vs2017.bat
 ```
 
@@ -21,6 +21,10 @@ Once the cefmixer.exe is built, it can be run without any arguments - in which c
 
 In addition to to rendering an HTML view off-screen, the demo application will also create an overlay layer using a PNG image file.
 
+The following screenshot was taken when running on a gaming monitor at 144Hz:
+
+[cefmixer_demo](https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png)
+
 The url can be specified as a command line argument: (width x height for the window size can also be specified)
 
 ```Batchfile
@@ -28,6 +32,6 @@ cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --
 ```
 
 # Room for Improvement
-
+A future update should allow the client application to perform SendBeginFrame.
 
 
