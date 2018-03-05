@@ -51,6 +51,7 @@ public:
 		: device_(device)
 		, abort_(false)
 		, swap_count_(0)
+		, sync_key_(0)
 	{
 	}
 
@@ -63,7 +64,7 @@ public:
 	//
 	// called in response to Cef's OnPaint notification
 	//
-	void on_paint(void* shared_handle)
+	void on_paint(void* shared_handle, uint64_t sync_key)
 	{
 		{
 			unique_lock<mutex> lock(lock_);
@@ -103,6 +104,7 @@ public:
 			}
 		}
 
+		sync_key_ = sync_key;
 		swap_count_ = 1;
 	}
 
@@ -135,12 +137,12 @@ public:
 		// issue copy when necessary
 		if (back && shared)
 		{
-			if (shared->lock_key(0))
+			if (shared->lock_key(sync_key_))
 			{
 				d3d11::ScopedBinder<d3d11::Texture2D> texture_binder(ctx, back);
 				back->copy_from(shared);
 
-				shared->unlock_key(0);
+				shared->unlock_key(sync_key_);
 			}
 			swap_count_ = 0;
 			swapped_.notify_one();
@@ -155,6 +157,7 @@ private:
 	atomic_bool abort_;
 	atomic_int32_t swap_count_;
 	condition_variable swapped_;
+	uint64_t sync_key_;
 	shared_ptr<d3d11::Texture2D> shared_buffer_;
 	shared_ptr<d3d11::Texture2D> back_buffer_;
 	shared_ptr<d3d11::Texture2D> front_buffer_;
@@ -168,8 +171,7 @@ class HtmlView : public CefClient,
 	public CefLifeSpanHandler
 {
 public:
-	HtmlView(
-			std::shared_ptr<d3d11::Device> const& device, 
+	HtmlView(std::shared_ptr<d3d11::Device> const& device, 
 			int width, 
 			int height)
 		: width_(width)
@@ -234,7 +236,7 @@ public:
 		PaintElementType type,
 		const RectList& dirtyRects,
 		void* share_handle, 
-		int64 sync_key) override
+		uint64 sync_key) override
 	{
 		frame_++;
 
@@ -254,7 +256,7 @@ public:
 		}
 
 		if (frame_buffer_) {
-			frame_buffer_->on_paint((void*)share_handle);
+			frame_buffer_->on_paint((void*)share_handle, sync_key);
 		}
 	}
 
