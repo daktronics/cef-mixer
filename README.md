@@ -32,7 +32,7 @@ cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --
 ```
 
 # Room for Improvement
-A future update should allow the client application to perform SendBeginFrame.
+A future update should allow the client application to perform SendBeginFrame by adding a new method to CEF's public interface.
 
 [demo1]: https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png "Cefmixer Demo"
 
