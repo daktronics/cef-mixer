@@ -17,14 +17,14 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 	 
       2. in existing `class Compositor` add:
 	
-	```c
-	void* GetSharedTexture();
-	void EnableSharedTexture(bool enable);
-	bool shared_texture_enabled() const{
-	  return shared_texture_enabled_;
-	}	
-	bool shared_texture_enabled_ = false;
-	```
+	 ```c
+	 void* GetSharedTexture();
+	 void EnableSharedTexture(bool enable);
+	 bool shared_texture_enabled() const{
+	   return shared_texture_enabled_;
+ 	 }	
+	 bool shared_texture_enabled_ = false;
+	 ```
 			
 
 
