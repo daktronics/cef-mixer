@@ -740,7 +740,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
    
 ### 6. Modify the OSR widget view to enabled shared textures with Chromium in **libcef/browser/osr/render_widget_host_view_osr.cc**
 
-   1. Before the instance of ui::Compositor is instantiated, add the following:
+   1. Before the instance of ui::Compositor is created, add the following:
    
       ```c
 	  // ask the application if it can handle OnAcceleratedPaint
@@ -753,7 +753,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
       }
 	  ```
 	  
-   2. Locate the call to SetAcceleratedWidget(compositor_widget_) and replace with the following:
+   2. Locate the call to `SetAcceleratedWidget(compositor_widget_)` and replace with the following:
    
       ```c
 	  if (accelerated_paint) {
@@ -764,11 +764,11 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	  compositor_->EnableSharedTexture(accelerated_paint);
 	  ```
 	  
-	  Telling Chromium to use kNullAcceleratedWidget will force it to use its off-screen FBO.
+	  Telling Chromium to use `kNullAcceleratedWidget` will force it to use its off-screen FBO.
 	  
-   3. In SubmitCompositorFrame locate where copy_frame_generator_ is instantiated and replace with the following.
+   3. In SubmitCompositorFrame locate where `copy_frame_generator_` is instantiated and replace with the following.
    
-	  We want to skip copy_frame_generator_->GenerateCopyFrame if we have a shared texture.
+	  We want to skip `copy_frame_generator_->GenerateCopyFrame` if we have a shared texture.
     
       ```c
 	  CefRefPtr<CefRenderHandler> handler =
@@ -823,11 +823,11 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 
 ### 8. Create a distribution for integration into an application
 
-    A useful command for partial distributions (e.g. if you just have a Debug build) :
+   A useful command for partial distributions (e.g. if you just have a Debug build) :
     
-	```Batchfile
-	src/cef/tools/make_distrib.bat --x64-build --ninja-build --no-archive --allow-partial --minimal
-	```
+   ```Batchfile
+   src/cef/tools/make_distrib.bat --x64-build --ninja-build --no-archive --allow-partial --minimal
+   ```
 	
    
    
