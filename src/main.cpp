@@ -159,6 +159,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		HACCEL accel_table = CreateAcceleratorTable(
 			accelerators, sizeof(accelerators) / sizeof(accelerators[0]));
 
+		auto ctx = device->immedidate_context();
+
 		// main message pump for our application
 		MSG msg = {};
 		while (msg.message != WM_QUIT)
@@ -174,10 +176,11 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 			else
 			{
 				// clear the render-target
+				swapchain->bind(ctx);
 				swapchain->clear(0.0f, 0.0f, 1.0f, 1.0f);
 
 				// render our scene
-				composition->render();
+				composition->render(ctx);
 
 				// present to window
 				swapchain->present(sync_interval_);

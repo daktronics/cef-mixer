@@ -10,15 +10,18 @@ namespace d3d11 {
 	class Geometry;
 	class Effect;
 	class Texture2D;
+	class Context;
 
 	template<class T>
 	class ScopedBinder
 	{
 	public:
-		ScopedBinder(std::shared_ptr<T> const& target)
+		ScopedBinder(
+			std::shared_ptr<Context> const& ctx, 
+			std::shared_ptr<T> const& target)
 			: target_(target)
 		{
-			if (target_) { target_->bind(); }
+			if (target_) { target_->bind(ctx); }
 		}
 		~ScopedBinder() { if (target_) { target_->unbind(); } }
 	private:
@@ -31,6 +34,10 @@ namespace d3d11 {
 		Context(ID3D11DeviceContext*);
 
 		void flush();
+
+		operator ID3D11DeviceContext*() {
+			return ctx_.get();
+		}
 
 	private:
 		
@@ -80,9 +87,8 @@ namespace d3d11 {
 
 		HMODULE _lib_compiler;
 
-		std::shared_ptr<ID3D11Device> const _device;
+		std::shared_ptr<ID3D11Device> const device_;
 		std::shared_ptr<Context> const ctx_;
-		std::shared_ptr<ID3D11DeviceContext> const _ctx;
 	};
 
 	//
@@ -91,11 +97,14 @@ namespace d3d11 {
 	class SwapChain
 	{
 	public:
-		SwapChain(std::shared_ptr<ID3D11DeviceContext> const& ctx,
+		SwapChain(
 				IDXGISwapChain*, 
 				ID3D11RenderTargetView*,
 				ID3D11SamplerState*,
 				ID3D11BlendState*);
+
+		void bind(std::shared_ptr<Context> const& ctx);
+		void unbind();
 
 		void clear(float red, float green, float blue, float alpha);
 
@@ -108,17 +117,17 @@ namespace d3d11 {
 		std::shared_ptr<ID3D11BlendState> const blender_;
 		std::shared_ptr<IDXGISwapChain> const swapchain_;
 		std::shared_ptr<ID3D11RenderTargetView> const rtv_;
-		std::shared_ptr<ID3D11DeviceContext> const ctx_;
+		std::shared_ptr<Context> ctx_;
 	};
 
 	class Texture2D
 	{
 	public:
-		Texture2D(std::shared_ptr<ID3D11DeviceContext> const& ctx,
+		Texture2D(
 			ID3D11Texture2D* tex,
 			ID3D11ShaderResourceView* srv);
 
-		void bind();
+		void bind(std::shared_ptr<Context> const& ctx);
 		void unbind();
 
 		uint32_t width() const;
@@ -138,18 +147,18 @@ namespace d3d11 {
 		
 		std::shared_ptr<ID3D11Texture2D> const texture_;
 		std::shared_ptr<ID3D11ShaderResourceView> const srv_;
-		std::shared_ptr<ID3D11DeviceContext> const ctx_;
+		std::shared_ptr<Context> ctx_;
 	};
 
 	class Effect
 	{
 	public:
-		Effect(std::shared_ptr<ID3D11DeviceContext> const& ctx,
+		Effect(
 				ID3D11VertexShader* vsh,
 				ID3D11PixelShader* psh,
 				ID3D11InputLayout* layout);
 
-		void bind();
+		void bind(std::shared_ptr<Context> const& ctx);
 		void unbind();
 
 	private:
@@ -157,21 +166,22 @@ namespace d3d11 {
 		std::shared_ptr<ID3D11VertexShader> const vsh_;
 		std::shared_ptr<ID3D11PixelShader> const psh_;
 		std::shared_ptr<ID3D11InputLayout> const layout_;
-		std::shared_ptr<ID3D11DeviceContext> const ctx_;
+		std::shared_ptr<Context> ctx_;
 	};
 
 
 	class Geometry
 	{
 	public:
-		Geometry(std::shared_ptr<ID3D11DeviceContext> const& ctx,
+		Geometry(
 			D3D_PRIMITIVE_TOPOLOGY primitive,
 			uint32_t vertices,
 			uint32_t stride,
 			ID3D11Buffer*);
 
-		void bind();
+		void bind(std::shared_ptr<Context> const& ctx);
 		void unbind();
+
 		void draw();
 
 	private:
@@ -180,7 +190,7 @@ namespace d3d11 {
 		uint32_t vertices_;
 		uint32_t stride_;
 		std::shared_ptr<ID3D11Buffer> const buffer_;
-		std::shared_ptr<ID3D11DeviceContext> const ctx_;
+		std::shared_ptr<Context> ctx_;
 	};
 
 

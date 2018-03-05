@@ -15,11 +15,13 @@ public:
 	~Layer();
 
 	virtual void move(float x, float y, float width, float height);	
-	virtual void render() = 0;
+	virtual void render(std::shared_ptr<d3d11::Context> const&) = 0;
 
 protected:
 
-	void render_texture(std::shared_ptr<d3d11::Texture2D> const&);
+	void render_texture(
+			std::shared_ptr<d3d11::Context> const& ctx, 
+			std::shared_ptr<d3d11::Texture2D> const& texture);
 
 	bool flip_;
 
@@ -38,7 +40,7 @@ class Composition
 public:
 	Composition(std::shared_ptr<d3d11::Device> const& device);
 
-	void render();
+	void render(std::shared_ptr<d3d11::Context> const&);
 	void add_layer(std::shared_ptr<Layer> const& layer);
 
 private:

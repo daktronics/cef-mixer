@@ -170,12 +170,12 @@ public:
 			std::shared_ptr<d3d11::Device> const& device, 
 			int width, 
 			int height)
-		: _width(width)
-		, _height(height)
+		: width_(width)
+		, height_(height)
 		, frame_buffer_(make_shared<FrameBuffer>(device))
 	{
-		_frame = 0;
-		_fps_start = 0ull;
+		frame_ = 0;
+		fps_start_ = 0ull;
 	}
 
 	~HtmlView()
@@ -188,11 +188,12 @@ public:
 		// break out of a pending wait
 		frame_buffer_->abort();
 
-		decltype(_browser) browser;
+		// get thread-safe reference
+		decltype(browser_) browser;
 		{
-			lock_guard<mutex> guard(_lock);
-			browser = _browser;
-			_browser = nullptr;
+			lock_guard<mutex> guard(lock_);
+			browser = browser_;
+			browser_ = nullptr;
 		}
 
 		if (browser.get()) {
@@ -223,7 +224,7 @@ public:
 	bool CanUseAcceleratedPaint(
 		CefRefPtr<CefBrowser> /*browser*/) override
 	{
-		return true;
+		return true; // we do support OnAcceleratedPaint
 	}
 
 	void OnAcceleratedPaint(
@@ -232,21 +233,21 @@ public:
 		const RectList& dirtyRects,
 		void* buffer) override
 	{
-		_frame++;
+		frame_++;
 
 		auto const now = time_now();
-		if (!_fps_start) {
-			_fps_start = now;
+		if (!fps_start_) {
+			fps_start_ = now;
 		}
 
-		if ((now - _fps_start) > 1000000) 
+		if ((now - fps_start_) > 1000000)
 		{
-			auto const fps = _frame / double((now - _fps_start) / 1000000.0);
+			auto const fps = frame_ / double((now - fps_start_) / 1000000.0);
 
 			log_message("html: OnPaint fps: %3.2f\n", fps);
 			
-			_frame = 0;
-			_fps_start = time_now();
+			frame_ = 0;
+			fps_start_ = time_now();
 		}
 
 		if (frame_buffer_) {
@@ -256,7 +257,7 @@ public:
 
 	bool GetViewRect(CefRefPtr<CefBrowser> /*browser*/, CefRect& rect) override
 	{
-		rect.Set(0, 0, _width, _height);
+		rect.Set(0, 0, width_, height_);
 		return true;
 	}
 
@@ -269,9 +270,9 @@ public:
 		}
 
 		{
-			lock_guard<mutex> guard(_lock);
-			if (!_browser.get()) {
-				_browser = browser;
+			lock_guard<mutex> guard(lock_);
+			if (!browser_.get()) {
+				browser_ = browser;
 			}
 		}
 	}
@@ -284,16 +285,13 @@ public:
 private:
 	IMPLEMENT_REFCOUNTING(HtmlView);
 
-	int _width;
-	int _height;
-
-	uint32_t _frame;
-	uint64_t _fps_start;
-
+	int width_;
+	int height_;
+	uint32_t frame_;
+	uint64_t fps_start_;
 	shared_ptr<FrameBuffer> frame_buffer_;
-
-	mutex _lock;
-	CefRefPtr<CefBrowser> _browser;
+	mutex lock_;
+	CefRefPtr<CefBrowser> browser_;
 };
 
 
@@ -304,30 +302,29 @@ public:
 		std::shared_ptr<d3d11::Device> const& device,
 		CefRefPtr<HtmlView> const& view)
 		: Layer(device, true)
-		, _view(view)
+		, view_(view)
 	{
 	}
 
 	~HtmlLayer()
 	{
-		if (_view) {
-			_view->close();
+		if (view_) {
+			view_->close();
 		}
 	}
 
-	void render() override
+	void render(shared_ptr<d3d11::Context> const& ctx) override
 	{
-		if (_view) 
+		if (view_) 
 		{
 			// simply use the base class method to draw our texture
-			render_texture(_view->texture());
+			render_texture(ctx, view_->texture());
 		}
 	}
 
 private:
 
-	CefRefPtr<HtmlView> const _view;
-	shared_ptr<d3d11::Texture2D> const _texture;
+	CefRefPtr<HtmlView> const view_;
 };
 
 //

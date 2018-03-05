@@ -31,7 +31,7 @@ namespace d3d11 {
 	}
 
 
-	SwapChain::SwapChain(std::shared_ptr<ID3D11DeviceContext> const& ctx, 
+	SwapChain::SwapChain(
 				IDXGISwapChain* swapchain, 
 				ID3D11RenderTargetView* rtv,
 				ID3D11SamplerState* sampler,
@@ -40,31 +40,44 @@ namespace d3d11 {
 		, blender_(to_com_ptr<ID3D11BlendState>(blender))
 		, swapchain_(to_com_ptr<IDXGISwapChain>(swapchain))
 		, rtv_(to_com_ptr<ID3D11RenderTargetView>(rtv))
-		, ctx_(ctx)
 	{
 	}
 
-	void SwapChain::clear(float red, float green, float blue, float alpha)
+	void SwapChain::bind(std::shared_ptr<Context> const& ctx)
 	{
+		ctx_ = ctx;
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
+
 		ID3D11RenderTargetView* rtv[1] = { rtv_.get() };
-		ctx_->OMSetRenderTargets(1, rtv, nullptr);
+		d3d11_ctx->OMSetRenderTargets(1, rtv, nullptr);
 
 		// set default blending state
 		if (blender_)
 		{
 			float factor[4] = { 0.0f, 0.0f, 0.0f, 0.0f };
-			ctx_->OMSetBlendState(blender_.get(), factor, 0xffffffff);
+			d3d11_ctx->OMSetBlendState(blender_.get(), factor, 0xffffffff);
 		}
 
 		// set default sampler state
 		if (sampler_)
 		{
 			ID3D11SamplerState* samplers[1] = { sampler_.get() };
-			ctx_->PSSetSamplers(0, 1, samplers);
+			d3d11_ctx->PSSetSamplers(0, 1, samplers);
 		}
+	}
+
+	void SwapChain::unbind()
+	{
+		ctx_.reset();
+	}
+
+	void SwapChain::clear(float red, float green, float blue, float alpha)
+	{
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
+		assert(d3d11_ctx);
 
 		FLOAT color[4] = { red, green, blue, alpha };
-		ctx_->ClearRenderTargetView(rtv_.get(), color);
+		d3d11_ctx->ClearRenderTargetView(rtv_.get(), color);
 	}
 
 	void SwapChain::present(int sync_interval)
@@ -77,22 +90,24 @@ namespace d3d11 {
 	}
 
 
-	Effect::Effect(std::shared_ptr<ID3D11DeviceContext> const& ctx,
+	Effect::Effect(
 		ID3D11VertexShader* vsh,
 		ID3D11PixelShader* psh,
 		ID3D11InputLayout* layout)
 		: vsh_(to_com_ptr<ID3D11VertexShader>(vsh))
 		, psh_(to_com_ptr<ID3D11PixelShader>(psh))
 		, layout_(to_com_ptr<ID3D11InputLayout>(layout))
-		, ctx_(ctx)
 	{
 	}
 
-	void Effect::bind()
+	void Effect::bind(shared_ptr<Context> const& ctx)
 	{
-		ctx_->IASetInputLayout(layout_.get());
-		ctx_->VSSetShader(vsh_.get(), nullptr, 0);
-		ctx_->PSSetShader(psh_.get(), nullptr, 0);
+		ctx_ = ctx;
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
+
+		d3d11_ctx->IASetInputLayout(layout_.get());
+		d3d11_ctx->VSSetShader(vsh_.get(), nullptr, 0);
+		d3d11_ctx->PSSetShader(psh_.get(), nullptr, 0);
 	}
 
 	void Effect::unbind()
@@ -100,7 +115,6 @@ namespace d3d11 {
 	}
 	
 	Geometry::Geometry(
-			std::shared_ptr<ID3D11DeviceContext> const& ctx,
 			D3D_PRIMITIVE_TOPOLOGY primitive,
 			uint32_t vertices,
 			uint32_t stride,
@@ -109,18 +123,20 @@ namespace d3d11 {
 		, vertices_(vertices)
 		, stride_(stride)
 		, buffer_(to_com_ptr<ID3D11Buffer>(buffer))
-		, ctx_(ctx)
 	{
 	}
 
-	void Geometry::bind()
+	void Geometry::bind(std::shared_ptr<Context> const& ctx)
 	{
+		ctx_ = ctx;
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
+
 		// todo: handle offset
 		uint32_t offset = 0;
 
 		ID3D11Buffer* buffers[1] = { buffer_.get() };
-		ctx_->IASetVertexBuffers(0, 1, buffers, &stride_, &offset);
-		ctx_->IASetPrimitiveTopology(primitive_);
+		d3d11_ctx->IASetVertexBuffers(0, 1, buffers, &stride_, &offset);
+		d3d11_ctx->IASetPrimitiveTopology(primitive_);
 	}
 
 	void Geometry::unbind()
@@ -129,18 +145,19 @@ namespace d3d11 {
 
 	void Geometry::draw()
 	{
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
+		assert(d3d11_ctx);
+
 		// todo: handle offset
-		ctx_->Draw(vertices_, 0);
+		d3d11_ctx->Draw(vertices_, 0);
 	}
 
 	
 	Texture2D::Texture2D(
-		std::shared_ptr<ID3D11DeviceContext> const& ctx,
 		ID3D11Texture2D* tex,
 		ID3D11ShaderResourceView* srv)
 		: texture_(to_com_ptr<ID3D11Texture2D>(tex))
 		, srv_(to_com_ptr<ID3D11ShaderResourceView>(srv))
-		, ctx_(ctx)
 	{
 		share_handle_ = nullptr;
 
@@ -151,7 +168,6 @@ namespace d3d11 {
 			res->GetSharedHandle(&share_handle_);
 			res->Release();
 		}
-
 	}
 
 	uint32_t Texture2D::width() const
@@ -197,12 +213,14 @@ namespace d3d11 {
 		}
 	}
 
-	void Texture2D::bind()
+	void Texture2D::bind(shared_ptr<Context> const& ctx)
 	{
+		ctx_ = ctx;
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
 		if (srv_)
 		{
 			ID3D11ShaderResourceView* views[1] = { srv_.get() };
-			ctx_->PSSetShaderResources(0, 1, views);
+			d3d11_ctx->PSSetShaderResources(0, 1, views);
 		}
 	}
 
@@ -217,16 +235,17 @@ namespace d3d11 {
 
 	void Texture2D::copy_from(std::shared_ptr<Texture2D> const& other)
 	{
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
+		assert(d3d11_ctx);
 		if (other) {
-			ctx_->CopyResource(texture_.get(), other->texture_.get());
+			d3d11_ctx->CopyResource(texture_.get(), other->texture_.get());
 		}
 	}
 
 
 	Device::Device(ID3D11Device* pdev, ID3D11DeviceContext* pctx)
-		: _device(to_com_ptr<ID3D11Device>(pdev))
+		: device_(to_com_ptr<ID3D11Device>(pdev))
 		, ctx_(make_shared<Context>(pctx))
-		, _ctx(to_com_ptr<ID3D11DeviceContext>(pctx))
 	{
 		_lib_compiler = LoadLibrary(L"d3dcompiler_47.dll");
 	}
@@ -253,7 +272,7 @@ namespace d3d11 {
 		
 		{
 			IDXGIDevice* dxgi_dev = nullptr;
-			hr = _device->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgi_dev));
+			hr = device_->QueryInterface(__uuidof(IDXGIDevice), reinterpret_cast<void**>(&dxgi_dev));
 			if (FAILED(hr)) {
 				return nullptr;
 			}
@@ -265,7 +284,8 @@ namespace d3d11 {
 				return nullptr;
 			}
 			
-			hr = adapter->GetParent(__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgi_factory));
+			hr = adapter->GetParent(
+				__uuidof(IDXGIFactory1), reinterpret_cast<void**>(&dxgi_factory));
 			adapter->Release();
 		}
 
@@ -292,7 +312,7 @@ namespace d3d11 {
 
 			IDXGISwapChain1* swapchain1 = nullptr;
 			hr = dxgi_factory2->CreateSwapChainForHwnd(
-							_device.get(), window, &sd, nullptr, nullptr, &swapchain1);
+							device_.get(), window, &sd, nullptr, nullptr, &swapchain1);
 			if (SUCCEEDED(hr))
 			{
 				hr = swapchain1->QueryInterface(__uuidof(IDXGISwapChain), reinterpret_cast<void**>(&swapchain));
@@ -318,7 +338,7 @@ namespace d3d11 {
 			sd.SampleDesc.Quality = 0;
 			sd.Windowed = TRUE;
 
-			hr = dxgi_factory->CreateSwapChain(_device.get(), &sd, &swapchain);
+			hr = dxgi_factory->CreateSwapChain(device_.get(), &sd, &swapchain);
 		}
 
 		// we don't handle full-screen swapchains so we block the ALT+ENTER shortcut
@@ -338,14 +358,16 @@ namespace d3d11 {
 		}
 
 		ID3D11RenderTargetView* rtv = nullptr;
-		hr = _device->CreateRenderTargetView(back_buffer, nullptr, &rtv);
+		hr = device_->CreateRenderTargetView(back_buffer, nullptr, &rtv);
 		back_buffer->Release();
 		if (FAILED(hr)) {
 			swapchain->Release();
 			return nullptr;
 		}
 
-		_ctx->OMSetRenderTargets(1, &rtv, nullptr);
+		auto const ctx = (ID3D11DeviceContext*)(*ctx_);
+
+		ctx->OMSetRenderTargets(1, &rtv, nullptr);
 
 		// Setup the viewport
 		D3D11_VIEWPORT vp;
@@ -355,7 +377,7 @@ namespace d3d11 {
 		vp.MaxDepth = 1.0f;
 		vp.TopLeftX = 0;
 		vp.TopLeftY = 0;
-		_ctx->RSSetViewports(1, &vp);
+		ctx->RSSetViewports(1, &vp);
 
 		// create a default sampler to use
 		ID3D11SamplerState* sampler = nullptr;
@@ -368,7 +390,7 @@ namespace d3d11 {
 			desc.MinLOD = 0.0f;
 			desc.MaxLOD = D3D11_FLOAT32_MAX;
 			desc.Filter = D3D11_FILTER_MIN_MAG_MIP_LINEAR;
-			_device->CreateSamplerState(&desc, &sampler);
+			device_->CreateSamplerState(&desc, &sampler);
 		}
 
 		// create a default blend state to use (pre-multiplied alpha)
@@ -389,10 +411,10 @@ namespace d3d11 {
 				desc.RenderTarget[n].BlendOpAlpha = D3D11_BLEND_OP_ADD;
 				desc.RenderTarget[n].RenderTargetWriteMask = D3D11_COLOR_WRITE_ENABLE_ALL;
 			}
-			_device->CreateBlendState(&desc, &blender);
+			device_->CreateBlendState(&desc, &blender);
 		}
 
-		return make_shared<SwapChain>(_ctx, swapchain, rtv, sampler, blender);
+		return make_shared<SwapChain>(swapchain, rtv, sampler, blender);
 	}
 	
 	std::shared_ptr<Geometry> Device::create_quad(
@@ -433,10 +455,10 @@ namespace d3d11 {
 		srd.pSysMem = vertices;
 
 		ID3D11Buffer* buffer = nullptr;
-		auto const hr = _device->CreateBuffer(&desc, &srd, &buffer);
+		auto const hr = device_->CreateBuffer(&desc, &srd, &buffer);
 		if (SUCCEEDED(hr)) {
-			return make_shared<Geometry>(_ctx, 
-					D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP, 4, static_cast<uint32_t>(sizeof(SimpleVertex)), buffer);
+			return make_shared<Geometry>(
+				D3D_PRIMITIVE_TOPOLOGY_TRIANGLESTRIP, 4, static_cast<uint32_t>(sizeof(SimpleVertex)), buffer);
 		}
 
 		return nullptr;
@@ -445,13 +467,13 @@ namespace d3d11 {
 	std::shared_ptr<Texture2D> Device::open_shared_texture(void* handle)
 	{
 		ID3D11Texture2D* tex = nullptr;
-		auto hr = _device->OpenSharedResource(
+		auto hr = device_->OpenSharedResource(
 				handle, __uuidof(ID3D11Texture2D), (void**)(&tex));
 		if (FAILED(hr)) {
 			return nullptr;
 		}
 
-		return make_shared<Texture2D>(_ctx, tex, nullptr);
+		return make_shared<Texture2D>(tex, nullptr);
 	}
 
 	std::shared_ptr<Texture2D> Device::create_texture(
@@ -480,7 +502,7 @@ namespace d3d11 {
 		srd.SysMemSlicePitch = 0;
 
 		ID3D11Texture2D* tex = nullptr;
-		auto hr = _device->CreateTexture2D(&td, data ? &srd : nullptr, &tex);
+		auto hr = device_->CreateTexture2D(&td, data ? &srd : nullptr, &tex);
 		if (FAILED(hr)) {
 			return nullptr;
 		}
@@ -492,14 +514,14 @@ namespace d3d11 {
 		srv_desc.Texture2D.MipLevels = 1;
 
 		ID3D11ShaderResourceView* srv = nullptr;
-		hr = _device->CreateShaderResourceView(tex, &srv_desc, &srv);
+		hr = device_->CreateShaderResourceView(tex, &srv_desc, &srv);
 		if (FAILED(hr))
 		{
 			tex->Release();
 			return nullptr;
 		}
 
-		return make_shared<Texture2D>(_ctx, tex, srv);
+		return make_shared<Texture2D>(tex, srv);
 	}
 
 
@@ -630,7 +652,7 @@ float4 main(VS_OUTPUT input) : SV_Target
 
 		if (vs_blob)
 		{
-			_device->CreateVertexShader(
+			device_->CreateVertexShader(
 					vs_blob->GetBufferPointer(), 
 					vs_blob->GetBufferSize(), 
 					nullptr, 
@@ -645,7 +667,7 @@ float4 main(VS_OUTPUT input) : SV_Target
 			UINT elements = ARRAYSIZE(layout_desc);
 
 			// Create the input layout
-			_device->CreateInputLayout(
+			device_->CreateInputLayout(
 				layout_desc,
 				elements,
 				vs_blob->GetBufferPointer(),
@@ -657,14 +679,14 @@ float4 main(VS_OUTPUT input) : SV_Target
 		ID3D11PixelShader* pshdr = nullptr;
 		if (ps_blob) 
 		{
-			_device->CreatePixelShader(
+			device_->CreatePixelShader(
 					ps_blob->GetBufferPointer(), 
 					ps_blob->GetBufferSize(), 
 					nullptr, 
 					&pshdr);
 		}
 
-		return make_shared<Effect>(_ctx, vshdr, pshdr, layout);
+		return make_shared<Effect>(vshdr, pshdr, layout);
 	}
 
 

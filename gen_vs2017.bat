@@ -1,9 +1,6 @@
 @echo off
 
-
-
-set CEF_ROOT=C:\cef_binary_3.3325.1742.g5caccda_windows64
-
+rem set CEF_ROOT=c:\cef\cef_binary_3.3325.1742.g5caccda_windows64
 
 set BASE_DIR=%~dp0
 rem echo %BASE_DIR%

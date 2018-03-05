@@ -22,7 +22,9 @@ void Layer::move(float x, float y, float width, float height)
 //
 // helper method for derived classes to draw a textured-quad.
 //
-void Layer::render_texture(shared_ptr<d3d11::Texture2D> const& texture)
+void Layer::render_texture(
+		shared_ptr<d3d11::Context> const& ctx, 
+		shared_ptr<d3d11::Texture2D> const& texture)
 {
 	if (geometry_ && texture)
 	{
@@ -32,9 +34,9 @@ void Layer::render_texture(shared_ptr<d3d11::Texture2D> const& texture)
 		}
 
 		// bind our states/resource to the pipeline
-		d3d11::ScopedBinder<d3d11::Geometry> quad_binder(geometry_);
-		d3d11::ScopedBinder<d3d11::Effect> fx_binder(effect_);
-		d3d11::ScopedBinder<d3d11::Texture2D> tex_binder(texture);
+		d3d11::ScopedBinder<d3d11::Geometry> quad_binder(ctx, geometry_);
+		d3d11::ScopedBinder<d3d11::Effect> fx_binder(ctx, effect_);
+		d3d11::ScopedBinder<d3d11::Texture2D> tex_binder(ctx, texture);
 
 		// actually draw the quad
 		geometry_->draw();
@@ -54,11 +56,11 @@ void Composition::add_layer(std::shared_ptr<Layer> const& layer)
 	}
 }
 
-void Composition::render()
+void Composition::render(shared_ptr<d3d11::Context> const& ctx)
 {
 	// pretty simple ... just use painter's algorithm and render 
 	// our layers in order (not doing any depth or 3D here)
 	for (auto const& layer : layers_) {
-		layer->render();
+		layer->render(ctx);
 	}
 }

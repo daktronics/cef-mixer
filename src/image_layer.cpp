@@ -12,19 +12,19 @@ public:
 			std::shared_ptr<d3d11::Device> const& device,
 			std::shared_ptr<d3d11::Texture2D> const& texture)
 		: Layer(device, false)
-		, _texture(texture)
+		, texture_(texture)
 	{
 	}
 
-	void render() override
+	void render(shared_ptr<d3d11::Context> const& ctx) override
 	{
 		// simply use the base class method to draw our texture
-		render_texture(_texture);
+		render_texture(ctx, texture_);
 	}
 
 private:
 
-	shared_ptr<d3d11::Texture2D> const _texture;
+	shared_ptr<d3d11::Texture2D> const texture_;
 };
 
 //
