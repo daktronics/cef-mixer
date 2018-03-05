@@ -119,7 +119,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
          }
 		 ```
 			
-      3. Modify EnsureBackBuffer to create a shared texture for the FBO if it was enabled
+      3. Modify `EnsureBackBuffer` to create a shared texture for the FBO if it was enabled
 		
          ```c
 		 void OffscreenBrowserCompositorOutputSurface::EnsureBackbuffer() {
@@ -188,37 +188,37 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 		 }
 		 ```
 		
-      4. Modify DiscardBackBuffer to tear-down the optional shared texture
+      4. Modify `DiscardBackBuffer` to tear-down the optional shared texture
 	  
          ```c
 		 void OffscreenBrowserCompositorOutputSurface::DiscardBackbuffer() {
-		   GLES2Interface* gl = context_provider_->ContextGL();
+		    GLES2Interface* gl = context_provider_->ContextGL();
 
-		   if (reflector_texture_) {
-			 reflector_texture_.reset();
-			 if (reflector_)
-			   reflector_->OnSourceTextureMailboxUpdated(nullptr);
-		   }
+		    if (reflector_texture_) {
+			   reflector_texture_.reset();
+			   if (reflector_)
+			      reflector_->OnSourceTextureMailboxUpdated(nullptr);
+		    }
 
-		   if (shared_handle_) {
-			  gl->DeleteSharedTexture(shared_handle_);
-			  shared_handle_ = 0ull;
-           }
+		    if (shared_handle_) {
+			   gl->DeleteSharedTexture(shared_handle_);
+			   shared_handle_ = 0ull;
+            }
 		   
-		   if (shared_texture_) {
-			  gl->DeleteTextures(1, &shared_texture_);
-			  shared_texture_ = 0;
-		   }
+		    if (shared_texture_) {
+			   gl->DeleteTextures(1, &shared_texture_);
+			   shared_texture_ = 0;
+		    }
 
-		   if (fbo_) {
-			gl->BindFramebuffer(GL_FRAMEBUFFER, fbo_);
-			gl->DeleteFramebuffers(1, &fbo_);
-			fbo_ = 0;
-		   }
+		    if (fbo_) {
+			   gl->BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+			   gl->DeleteFramebuffers(1, &fbo_);
+			   fbo_ = 0;
+		    }
 		 }
 		 ```
 			
-      5. Modify BindFrameBuffer to optionally lock our shared texture
+      5. Modify `BindFrameBuffer` to optionally lock our shared texture
 	  
 		 This method will be called before rendering a frame begins, so we issue a call to lock the shared surface
 	  
@@ -246,50 +246,50 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 		 }
 		 ```
 			
-      6. Modify swapbuffers to unlock our shared texture and issue a glFlush
+      6. Modify `Swapbuffers` to unlock our shared texture and issue a glFlush
 		
 		 This method will be called after a frame is rendered - unlock and Flush
 		
 		 ```c
 		 void OffscreenBrowserCompositorOutputSurface::SwapBuffers(
 			viz::OutputSurfaceFrame frame) {
-		  gfx::Size surface_size = frame.size;
-		  DCHECK(surface_size == reshape_size_);
+		    gfx::Size surface_size = frame.size;
+		    DCHECK(surface_size == reshape_size_);
 
-		  if (reflector_) {
-			if (frame.sub_buffer_rect)
-			  reflector_->OnSourcePostSubBuffer(*frame.sub_buffer_rect, surface_size);
-			else
-			  reflector_->OnSourceSwapBuffers(surface_size);
-		  }
+		    if (reflector_) {
+			   if (frame.sub_buffer_rect)
+			      reflector_->OnSourcePostSubBuffer(*frame.sub_buffer_rect, surface_size);
+			   else
+			      reflector_->OnSourceSwapBuffers(surface_size);
+		    }
 
-		  // TODO(oshima): sync with the reflector's SwapBuffersComplete
-		  // (crbug.com/520567).
-		  // The original implementation had a flickering issue (crbug.com/515332).
-		  gpu::gles2::GLES2Interface* gl = context_provider_->ContextGL();
+		    // TODO(oshima): sync with the reflector's SwapBuffersComplete
+		    // (crbug.com/520567).
+		    // The original implementation had a flickering issue (crbug.com/515332).
+		    gpu::gles2::GLES2Interface* gl = context_provider_->ContextGL();
 		  
-		  // if using a shared texture, we need to Flush
-		  if (shared_handle_)
-		  {
-			  gl->UnlockSharedTexture(shared_handle_, 0);
-			  gl->Flush();
-		  }
+		    // if using a shared texture, we need to Flush
+		    if (shared_handle_)
+		    {
+			   gl->UnlockSharedTexture(shared_handle_, 0);
+			   gl->Flush();
+		    }
 
-		  gpu::SyncToken sync_token;
-		  gl->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
-		  context_provider_->ContextSupport()->SignalSyncToken(
-			  sync_token,
-			  base::Bind(
-				  &OffscreenBrowserCompositorOutputSurface::OnSwapBuffersComplete,
-				  weak_ptr_factory_.GetWeakPtr(), frame.latency_info, ++swap_id_));
+		    gpu::SyncToken sync_token;
+		    gl->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
+		    context_provider_->ContextSupport()->SignalSyncToken(
+			   sync_token,
+			   base::Bind(
+				   &OffscreenBrowserCompositorOutputSurface::OnSwapBuffersComplete,
+				   weak_ptr_factory_.GetWeakPtr(), frame.latency_info, ++swap_id_));
 	     }
 		 ```		
 		 
-### 3. Update GpuProcessTransportFactory to return the shared texture in use
+### 3. Update `GpuProcessTransportFactory` to return the shared texture in use
 
    1. In **content/browser/compositor/gpu_process_transport_factory.h** add the following declaration:
 	
-      1. In existing GpuProcessTransportFactory:
+      1. In existing `class GpuProcessTransportFactory` add:
 		
          ```c
 		 void* GetSharedTexture(ui::Compositor* compositor) override;
@@ -297,7 +297,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 			
    2. In **content/browser/compositor/gpu_process_transport_factory.cc** add the following:
 	
-      1. Add the implementation for GetSharedTexture
+      1. Add the implementation for `GetSharedTexture`
 		
 		 ```c
          void* GpuProcessTransportFactory::GetSharedTexture(ui::Compositor* compositor)
@@ -312,9 +312,11 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 				return data->display_output_surface->GetSharedTexture();
 			return nullptr;
 		 }
+		 ```
 			
-	  2. In the existing method EstablishedGpuChannel, locate where the OffscreenBrowserCompositorOutputSurface is created 
-		    and modify to include the shared texture flag:
+	  2. In the existing method `EstablishedGpuChannel`
+	  
+	     Locate where the `OffscreenBrowserCompositorOutputSurface` is created and modify to include the shared texture flag:
 		
          ```c		
 		 if (data->surface_handle == gpu::kNullSurfaceHandle) {
@@ -326,11 +328,11 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 		 }
 		 ```
 			
-   3. In **content/browser/compositor/viz_process_transport_factory.h** add the following to VizProcessTransportFactory:
+   3. In **content/browser/compositor/viz_process_transport_factory.h** add the following to `VizProcessTransportFactory` :
 	
 	  ```c
 	  void* GetSharedTexture(ui::Compositor*) override;
-	  ```
+	  ```  
 		
    4. In **content/browser/compositor/viz_process_transport_factory.cc** add the following implementation:
 	
@@ -338,6 +340,7 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	  void* VizProcessTransportFactory::GetSharedTexture(ui::Compositor*) {
 	     return nullptr;	
 	  }
+	  ```	  
 	  
 ### 4. Add new gl commands to create/delete/lock/unlock shared textures
 
@@ -559,6 +562,8 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 	
 ### 6. Should be able to build the project at this point to make sure everything compiles.
 	 
+   This is the end of modifications to Chromium.  The next section will discuss changes to CEF in order to use
+   the functionality we just added to Chromium
 	 
 ## CEF Modifications
 
