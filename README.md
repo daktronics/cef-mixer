@@ -43,6 +43,7 @@ Obviously, there are not many use cases to render frames completely unthrottled 
 # Room for Improvement
 A future update could include the following 
  * Allow the client application to perform SendBeginFrame by adding a new method to CEF's public interface.
+     * Chromium already supports an External BeginFrame source - CEF currently does not expose it directly.
  * Update OffscreenBrowserCompositorOutputSurface class to handle both the Reflector and a shared texture
      * This was attempted originally but ran into issues creating a complete FBO on the Reflector texture
      * Not a big deal for CEF applications, since CEF does not use the Reflector concept in Chromium anyway.
