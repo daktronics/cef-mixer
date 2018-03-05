@@ -11,7 +11,7 @@ A sample application to demonstrate how to use the proposed OnAcceleratedPaint()
     
 2. From a command prompt set the environment variable CEF_ROOT to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
 
-```Text
+```Batchfile
 > set CEF_ROOT=<path\to\cef\binary-distribution>
 > gen_vs2017.bat
 ```
