@@ -1,24 +1,26 @@
 # CEF Offscreen-Rendering (OSR) Mixer Demo
 
-A sample application to demonstrate how to use the proposed OnAcceleratedPaint() callback when using CEF for HTML off-screen rendering.  This application uses [pull request 158][pr158] for CEF which improves the OSR rendering performance.
+A sample application to demonstrate how to use the proposed `OnAcceleratedPaint()` callback when using CEF for HTML off-screen rendering.  This application uses [pull request 158][pr158] for CEF which improves the OSR rendering performance.
 
 # Build Instructions
 
-1. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
+1. If you don't have it already - install CMake
+
+2. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
     * [x64 sample binary distribution (Release build only)][x64_build]
     * [x86 sample binary distribution (Release build only)][x86_build]
     * The above sample distributions are not supported official builds - they are intended for testing/demo purposes.
     
-2. From a command prompt set the environment variable CEF_ROOT to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
+3. From a command prompt set the environment variable CEF_ROOT to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
 
 ```Batchfile
 > set CEF_ROOT=<path\to\cef\binary-distribution>
 > gen_vs2017.bat
 ```
 
-3. Open the build/cefmixer.sln solution in Visual Studio
-4. Build the ALL_BUILD project
-5. Run the cefmixer.exe application
+4. Open the build/cefmixer.sln solution in Visual Studio
+5. Build the ALL_BUILD project
+6. Run the cefmixer.exe application
 
 # Usage
 Once the cefmixer.exe is built, it can be run without any arguments - in which case it will automatically navigate to https://webglsamples.org/aquarium/aquarium.html
@@ -44,7 +46,7 @@ Obviously, there are not many use cases to render frames completely unthrottled 
 A future update could include the following 
  * Allow the client application to perform SendBeginFrame by adding a new method to CEF's public interface.
      * Chromium already supports an External BeginFrame source - CEF currently does not expose it directly.
- * Update OffscreenBrowserCompositorOutputSurface class to handle both the Reflector and a shared texture
+ * Update `OffscreenBrowserCompositorOutputSurface` class to handle both the Reflector and a shared texture
      * This was attempted originally but ran into issues creating a complete FBO on the Reflector texture
      * Not a big deal for CEF applications, since CEF does not use the Reflector concept in Chromium anyway.
  * Take the Chromium changes directly to the Chromium team
