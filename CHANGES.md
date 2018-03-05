@@ -179,8 +179,7 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 
 				 gl->BindFramebuffer(GL_FRAMEBUFFER, fbo_);
 				 gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
-												  GL_TEXTURE_2D, color_attachment,
-												  0);
+                     GL_TEXTURE_2D, color_attachment, 0);
 		    }
 		 }
 		 ```
@@ -283,3 +282,266 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 		 ```		
 		 
 3. Update GpuProcessTransportFactory to return the shared texture in use
+
+   1. In content/browser/compositor/gpu_process_transport_factory.h add the following declaration:
+	
+      1. In existing GpuProcessTransportFactory:
+		
+         ```void* GetSharedTexture(ui::Compositor* compositor) override;```
+			
+   2. In content/browser/compositor/gpu_process_transport_factory.cc add the following:
+	
+      1. Add the implementation for GetSharedTexture
+		
+		 ```c
+         void* GpuProcessTransportFactory::GetSharedTexture(ui::Compositor* compositor)
+		 {
+		    PerCompositorDataMap::iterator it = per_compositor_data_.find(compositor);
+			if (it == per_compositor_data_.end())
+			   return nullptr;
+			PerCompositorData* data = it->second.get();
+			DCHECK(data);
+
+			if (data->display_output_surface)
+				return data->display_output_surface->GetSharedTexture();
+			return nullptr;
+		 }
+			
+	  2. In the existing method EstablishedGpuChannel, locate where the OffscreenBrowserCompositorOutputSurface is created 
+		    and modify to include the shared texture flag:
+		
+         ```c		
+		 if (data->surface_handle == gpu::kNullSurfaceHandle) {
+		    display_output_surface = 
+			  std::make_unique<OffscreenBrowserCompositorOutputSurface>(
+			  context_provider, vsync_callback,
+			  std::unique_ptr<viz::CompositorOverlayCandidateValidator>(),
+			  compositor->shared_texture_enabled());
+		 }
+		 ```
+			
+   3. In content/browser/compositor/viz_process_transport_factory.h add the following to VizProcessTransportFactory:
+	
+	  ```void* GetSharedTexture(ui::Compositor*) override;```
+		
+   4. In content/browser/compositor/viz_process_transport_factory.cc add the following implementation:
+	
+	  ```c
+	  void* VizProcessTransportFactory::GetSharedTexture(ui::Compositor*) {
+	     return nullptr;	
+	  }
+	  
+4. Add new gl commands to create/delete/lock/unlock shared textures
+
+   1. In gpu/command_buffer/cmd_buffer_functions.txt add the following declarations
+   
+      ```c
+      // shared handle extensions
+	  GL_APICALL GLuint64     GL_APIENTRY glCreateSharedTexture (GLuint texture_id, GLsizei width, GLsizei height, GLboolean syncable);
+	  GL_APICALL void         GL_APIENTRY glLockSharedTexture (GLuint64 shared_handle, GLuint64 sync_key);
+	  GL_APICALL void         GL_APIENTRY glUnlockSharedTexture (GLuint64 shared_handle, GLuint64 sync_key);
+	  GL_APICALL void         GL_APIENTRY glDeleteSharedTexture (GLuint64 shared_handle);
+	  ```
+		
+   2. In gpu/command_buffer/build_gles2_cmd_buffer.py add the following to represent our 4 new commands:
+	
+	  ```c
+		'CreateSharedTexture': {
+			'type': 'Custom',
+			'data_transfer_methods': ['shm'],
+			'cmd_args': 'GLint texture_id, GLint width, '
+						'GLint height, GLboolean syncable, GLuint64* result',
+			'result': ['GLuint64'],
+			'unit_test': False,
+			'impl_func': False,
+			'client_test': False,
+			'extension': True,
+		},
+		'LockSharedTexture': {
+			'type': 'Custom',
+			'unit_test': False,
+			'impl_func': False,
+			'client_test': False,
+			'extension': True,
+		},
+		'UnlockSharedTexture': {
+			'type': 'Custom',
+			'unit_test': False,
+			'impl_func': False,
+			'client_test': False,
+			'extension': True,
+		},
+		'DeleteSharedTexture': {
+			'type': 'Custom',
+			'unit_test': False,
+			'impl_func': False,
+			'client_test': False,
+			'extension': True,
+		}
+	  ```
+		
+   3. From a command prompt run: (current dir should be <chromium>/src/) to generate code for new commands
+	
+	  ```> python gpu/command_buffer/build_gles2_cmd_buffer.py```
+		
+   4. In gpu/command_buffer/client/gles2_implementation.cc add the following implementations:
+	
+     ```c
+	 GLuint64 GLES2Implementation::CreateSharedTexture(
+			GLuint texture_id, GLsizei width, GLsizei height, GLboolean lockable) 
+	 {
+		typedef cmds::CreateSharedTexture::Result Result;
+		Result* result = GetResultAs<Result*>();
+		if (!result) {
+			return 0;
+		}
+		*result = 0;
+		helper_->CreateSharedTexture(texture_id, width, height, lockable,
+			GetResultShmId(), GetResultShmOffset());
+		
+		WaitForCmd();
+		return *result;
+	 }
+
+	 void GLES2Implementation::LockSharedTexture(GLuint64 shared_handle, GLuint64 key) {
+		helper_->LockSharedTexture(shared_handle, key);
+	 }
+
+	 void GLES2Implementation::UnlockSharedTexture(GLuint64 shared_handle, GLuint64 key) {
+		helper_->UnlockSharedTexture(shared_handle, key);
+	 }
+
+	 void GLES2Implementation::DeleteSharedTexture(GLuint64 shared_handle) {
+		helper_->DeleteSharedTexture(shared_handle);
+	 }
+	 ```
+		
+  5. In gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc add the following implementations:
+
+     ```c  
+	 error::Error GLES2DecoderPassthroughImpl::HandleCreateSharedTexture(
+		uint32_t immediate_data_size,
+		const volatile void* cmd_data) {
+		return error::kNoError;
+	 }
+
+	 error::Error GLES2DecoderPassthroughImpl::HandleLockSharedTexture(
+		uint32_t immediate_data_size,
+		const volatile void* cmd_data) {
+		return error::kNoError;
+	 }
+
+	 error::Error GLES2DecoderPassthroughImpl::HandleUnlockSharedTexture(
+		uint32_t immediate_data_size,
+		const volatile void* cmd_data) {
+		return error::kNoError;
+	 }
+
+	 error::Error GLES2DecoderPassthroughImpl::HandleDeleteSharedTexture(
+		uint32_t immediate_data_size,
+		const volatile void* cmd_data) {
+		return error::kNoError;
+	 }
+     ```
+	
+  6. In gpu/command_buffer/service/gles2_cmd_decoder.cc add the following implementations
+	
+	 ```c
+	 error::Error GLES2DecoderImpl::HandleCreateSharedTexture(
+		uint32_t immediate_data_size,
+		const volatile void* cmd_data) {
+		const volatile gles2::cmds::CreateSharedTexture& c =
+			*static_cast<const volatile gles2::cmds::CreateSharedTexture*>(
+			cmd_data);
+		GLuint texture_id = c.texture_id;
+		uint32_t width = c.width;
+		uint32_t height = c.height;
+		bool syncable = c.syncable;
+		
+		typedef cmds::CreateSharedTexture::Result Result;
+		Result* result_dst = GetSharedMemoryAs<Result*>(
+			c.result_shm_id, c.result_shm_offset, sizeof(*result_dst));
+		if (!result_dst) {
+			return error::kOutOfBounds;
+		}
+		
+		void* shared_handle = external_texture_manager()->CreateTexture(
+			texture_id, width, height, syncable, texture_manager());
+			
+		*result_dst = (GLuint64)(shared_handle);		
+		
+		return error::kNoError;
+	 }
+
+     error::Error GLES2DecoderImpl::HandleLockSharedTexture(
+			uint32_t immediate_data_size,
+			const volatile void* cmd_data) {
+			const volatile gles2::cmds::LockSharedTexture& c =
+				*static_cast<const volatile gles2::cmds::LockSharedTexture*>(
+					cmd_data);
+		void* handle = (void*)(c.shared_handle());
+		GLuint64 key = c.sync_key();
+
+		external_texture_manager()->LockTexture(handle, key);
+
+		return error::kNoError;
+	 }
+
+	 error::Error GLES2DecoderImpl::HandleUnlockSharedTexture(
+		uint32_t immediate_data_size,
+		const volatile void* cmd_data) {
+		const volatile gles2::cmds::UnlockSharedTexture& c =
+			*static_cast<const volatile gles2::cmds::UnlockSharedTexture*>(
+				cmd_data);
+		void* handle = (void*)(c.shared_handle());
+		GLuint64 key = c.sync_key();
+
+		external_texture_manager()->UnlockTexture(handle, key);
+
+		return error::kNoError;
+	 }
+
+	 error::Error GLES2DecoderImpl::HandleDeleteSharedTexture(
+			uint32_t immediate_data_size,
+			const volatile void* cmd_data) {
+			const volatile gles2::cmds::DeleteSharedTexture& c =
+					*static_cast<const volatile gles2::cmds::DeleteSharedTexture*>(
+					cmd_data);
+		void* handle = (void*)(c.shared_handle());
+			
+		external_texture_manager()->DeleteTexture(handle, texture_manager());
+			
+		return error::kNoError;
+	 }	
+	
+	
+  7. In gpu/command_buffer/service/gles2_cmd_decoder.cc declare a member in GLES2DecoderImpl for ExternalTextureManager:
+	
+	 ```c
+	 #include "gpu/command_buffer/service/external_texture_manager.h"
+		
+		...
+	
+	
+	 ExternalTextureManager* external_texture_manager() {
+		if (!external_texture_manager_.get()) {
+			external_texture_manager_.reset(new gles2::ExternalTextureManager());
+		}
+		return external_texture_manager_.get();
+	 }
+
+	 ... 
+		  
+	 std::unique_ptr<ExternalTextureManager> external_texture_manager_;
+	 ```
+
+5. Add source files for ExternalTextureManager to the build
+
+   1. in gpu/command_buffer/service/BUILD.gn add: 
+	
+	 ```
+	 "external_texture_manager.cc",
+	 "external_texture_manager.h",
+	 ```
+		
+	 to the list of sources under the target gles2_sources
