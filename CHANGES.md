@@ -562,6 +562,10 @@ wishes to attempt something similar in the future.
 	
 ### 6. Should be able to build the project at this point to make sure everything compiles.
 	 
+   ```Batchfile
+   ninja -C out\Debug_GN_x64 cefclient
+   ```
+	 
    This is the end of modifications to Chromium.  The next section will discuss changes to CEF in order to use
    the functionality we just added to Chromium
 	 
@@ -825,6 +829,10 @@ wishes to attempt something similar in the future.
 	  ```
 
 ### 7. We can now re-build with the CEF changes
+
+   ```Batchfile
+   ninja -C out\Debug_GN_x64 cefclient
+   ```
 
 ### 8. Create a distribution for integration into an application
 
