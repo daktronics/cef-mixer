@@ -2,7 +2,7 @@
 
 A sample application to demonstrate how to use the proposed `OnAcceleratedPaint()` callback when using CEF for HTML off-screen rendering.  This application uses [pull request 158][pr158] for CEF which improves the OSR rendering performance.
 
-# Build Instructions
+## Build Instructions
 
 1. If you don't have it already - install CMake and Visual Studio 2017
     * VS 2017 Community Edition is fine - just make sure to install C/C++ development tools
@@ -28,7 +28,7 @@ Note: if you're building for x86 you will need to modify gen_vs2017.bat to speci
 
 6. Run the **cefmixer.exe** application
 
-# Usage
+## Usage
 Once the cefmixer.exe is built, it can be run without any arguments - in which case it will automatically navigate to https://webglsamples.org/aquarium/aquarium.html
 
 In addition to to rendering an HTML view off-screen, the demo application will also create an overlay layer using a PNG image file (the red DEMO graphic in the screenshots below).
@@ -48,7 +48,7 @@ Pressing `Ctrl+V` while the application is running can show the HTML view runnin
 
 Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. If the integrating application is doing its own v-sync ... then there shouldn't be any other component in the rendering pipeline that is also doing v-sync.  This demo application passes the command-line arg `disable-gpu-vsync` to Chromium.
 
-# Room for Improvement
+## Room for Improvement
 A future update could include the following 
  * Allow the client application to perform SendBeginFrame by adding a new method to CEF's public interface.
      * Chromium already supports an External BeginFrame source - CEF currently does not expose it directly.
