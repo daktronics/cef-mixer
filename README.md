@@ -1,6 +1,6 @@
 # CEF Offscreen-Rendering (OSR) Mixer Demo
 
-A sample application to demonstrate how to use the proposed OnAcceleratedPaint() callback when using CEF for HTML off-screen rendering.
+A sample application to demonstrate how to use the proposed OnAcceleratedPaint() callback when using CEF for HTML off-screen rendering.  This application uses [pull request 158](https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff) for CEF which improves the OSR rendering performance.
 
 # Build Instructions
 
