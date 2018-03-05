@@ -10,29 +10,21 @@ offscreen rendering directly to a shared texture.  I thought it would be best to
 ui::Compositor represents the interaction point between CEF and Chromium that we are going to modify to enable and retrieve shared texture information.
    
    1. in ui/compositor/compositor.h add the following declarations:
+      
       1. in existing `class ContextFactoryPrivate` add :
       
-         `virtual void* GetSharedTexture(ui::Compositor* compositor) = 0;`
+         ```virtual void* GetSharedTexture(ui::Compositor* compositor) = 0;```
+	 
+      2. in existing `class Compositor` add:
+	
+	```void* GetSharedTexture();
+	void EnableSharedTexture(bool enable);
+	bool shared_texture_enabled() const{
+	  return shared_texture_enabled_;
+	}
+	
+	bool shared_texture_enabled_ = false;```
 			
-
-# Build and Update Chromium
-
-Because Chromium and CEF are 2 separate projects - we're going to modify Chromium outside of the CEF build tree.  With our changes to Chromium, we will then create a patch file and integrate it with CEF.
-
-1.  Follow [these instructions][chromium_win] to setup a development environment for Chromium
-    * Do not use --no-history when performing the fetch
-    * After you do perform the initial fetch, run `git fetch --tags`
-    * Locate the Chromium hash that CEF master is using (this can be located in CHROMIUM_BUILD_COMPATIBILITY.txt directly in the CEF source root)
-    * Run `git checkout -f <hash from CHROMIUM_BUILD_COMPATIBILITY.txt>`
-    * Run `gclient sync --with_branch_heads`
-    
-2. Use ninja to generate and build Chromium
-
-3. 
 
 
 # Apply Chromium patch and modify CEF
-
-
-
-[chromium_win]: https://chromium.googlesource.com/chromium/src/+/master/docs/windows_build_instructions.md
