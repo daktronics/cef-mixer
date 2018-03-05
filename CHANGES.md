@@ -42,10 +42,10 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 		 }
          ```
 		
-2.  Update OffscreenBrowserCompositorOutputSurface to use a shared texture for its FBO
+2. Update OffscreenBrowserCompositorOutputSurface to use a shared texture for its FBO
 
-	This is the main object used for accelerated off-screen rendering in Chromium.  We're going to modify it so
-	it will use a shared d3d11 texture as the color attachment for its FBO.
+   This is the main object used for accelerated off-screen rendering in Chromium.  We're going to modify it so
+   it will use a shared d3d11 texture as the color attachment for its FBO.
 
    1. In content/browser/browser_compositor_output_surface.h add the following declaration to BrowserCompositorOuptutSurface:
        
@@ -55,12 +55,12 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 		
    2. In content/browser/browser_compositor_output_surface.cc add the following implementation:
    
-      ```c
-	  void* BrowserCompositorOuptutSurface::GetSharedTexture() const
-	  {
-	    return nullptr;
-	  }
-	  ```
+       ```c
+	   void* BrowserCompositorOuptutSurface::GetSharedTexture() const
+	   {
+	      return nullptr;
+	   }
+	   ```
 		
    3. In content/browser/offscreen_browser_compositor_output_surface.h 
 	
@@ -72,7 +72,7 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
            const UpdateVSyncParametersCallback& update_vsync_parameters_callback,
 		   std::unique_ptr<viz::CompositorOverlayCandidateValidator> overlay_candidate_validator,
 		   bool shared_texture_enabled);
-		```
+		 ```
 		
       2. Add the following declaration to OffscreenBrowserCompositorOutputSurface:
 	     
@@ -183,7 +183,7 @@ ui::Compositor represents the interaction point between CEF and Chromium that we
 												  0);
 		    }
 		 }
-		```
+		 ```
 		
       4. Modify DiscardBackBuffer to tear-down the optional shared texture
 	  
