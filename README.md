@@ -14,7 +14,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
     
 3. From a command prompt set the environment variable CEF_ROOT to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
 
-```Batchfile
+```
 > set CEF_ROOT=<path\to\cef\binary-distribution>
 > gen_vs2017.bat
 ```
@@ -39,7 +39,7 @@ The following screenshot was taken when running on a gaming monitor at 144Hz:
 
 The url for the HTML layer can be specified as a command line argument: (width x height for the window size are also supported on the command-line)
 
-```Batchfile
+```
 cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --width=960 --height=540
 ```
 Pressing `Ctrl+V` while the application is running can show the HTML view running unthrottled with no v-sync:
