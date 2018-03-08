@@ -52,7 +52,7 @@ shared_ptr<Layer> create_image_layer(
 		return nullptr;
 	}
 
-	shared_ptr<IWICImagingFactory> wic(pwic, [](IWICImagingFactory* p) { if (p) p->Release(); });
+	auto const wic = to_com_ptr(pwic);
 
 	IWICBitmapDecoder* pdec = nullptr;
 	hr = wic->CreateDecoderFromFilename(
@@ -65,7 +65,7 @@ shared_ptr<Layer> create_image_layer(
 		return nullptr;
 	}
 
-	shared_ptr<IWICBitmapDecoder> decoder(pdec, [](IWICBitmapDecoder* p) { if (p) p->Release(); });
+	auto const decoder = to_com_ptr(pdec);
 
 	IWICBitmapFrameDecode* pfrm = nullptr;
 	hr = decoder->GetFrame(0, &pfrm);
@@ -73,14 +73,14 @@ shared_ptr<Layer> create_image_layer(
 		return nullptr;
 	}
 
-	shared_ptr<IWICBitmapFrameDecode> frame(pfrm, [](IWICBitmapFrameDecode* p) { if (p) p->Release(); });
+	auto const frame = to_com_ptr(pfrm);
 
 	IWICFormatConverter* pcnv = nullptr;
 	hr = wic->CreateFormatConverter(&pcnv);
 	if (FAILED(hr)) {
 		return nullptr;
 	}
-	shared_ptr<IWICFormatConverter> converter(pcnv, [](IWICFormatConverter* p) { if (p) p->Release(); });
+	auto const converter(pcnv);
 
 	hr = converter->Initialize(
 			frame.get(), GUID_WICPixelFormat32bppPRGBA, 

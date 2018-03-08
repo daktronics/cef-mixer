@@ -14,3 +14,13 @@ std::wstring to_utf16(const char*);
 int to_int(std::string, int default_val);
 
 std::shared_ptr<std::string> locate_media(std::string const&);
+
+// 
+// simple method to wrap a raw COM pointer in a shared_ptr
+// for auto Release()
+//
+template<class T>
+std::shared_ptr<T> to_com_ptr(T* obj)
+{
+	return std::shared_ptr<T>(obj, [](T* p) { if (p) p->Release(); });
+}

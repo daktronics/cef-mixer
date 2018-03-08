@@ -347,6 +347,8 @@ shared_ptr<Layer> create_html_layer(
 	winfo.parent_window = nullptr;
 
 	CefBrowserSettings settings;
+
+	// this value is meaningless when using shared textures
 	settings.windowless_frame_rate = 120;
 
 	CefRefPtr<HtmlView> view(new HtmlView(device, width, height));

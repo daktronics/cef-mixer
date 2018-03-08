@@ -1,4 +1,5 @@
 #include "d3d11.h"
+#include "util.h"
 
 #include <d3dcompiler.h>
 #include <directxmath.h>
@@ -8,12 +9,6 @@ using namespace std;
 
 namespace d3d11 {
 
-	template<class T>
-	shared_ptr<T> to_com_ptr(T* obj)
-	{
-		return shared_ptr<T>(obj, [](T* p) { if (p) p->Release(); });
-	}
-
 	struct SimpleVertex
 	{
 		DirectX::XMFLOAT3 pos;
@@ -21,7 +16,7 @@ namespace d3d11 {
 	};
 
 	Context::Context(ID3D11DeviceContext* ctx)
-		: ctx_(to_com_ptr<ID3D11DeviceContext>(ctx))
+		: ctx_(to_com_ptr(ctx))
 	{
 	}
 
@@ -36,14 +31,14 @@ namespace d3d11 {
 				ID3D11RenderTargetView* rtv,
 				ID3D11SamplerState* sampler,
 				ID3D11BlendState* blender)
-		: sampler_(to_com_ptr<ID3D11SamplerState>(sampler))
-		, blender_(to_com_ptr<ID3D11BlendState>(blender))
-		, swapchain_(to_com_ptr<IDXGISwapChain>(swapchain))
-		, rtv_(to_com_ptr<ID3D11RenderTargetView>(rtv))
+		: sampler_(to_com_ptr(sampler))
+		, blender_(to_com_ptr(blender))
+		, swapchain_(to_com_ptr(swapchain))
+		, rtv_(to_com_ptr(rtv))
 	{
 	}
 
-	void SwapChain::bind(std::shared_ptr<Context> const& ctx)
+	void SwapChain::bind(shared_ptr<Context> const& ctx)
 	{
 		ctx_ = ctx;
 		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
@@ -94,9 +89,9 @@ namespace d3d11 {
 		ID3D11VertexShader* vsh,
 		ID3D11PixelShader* psh,
 		ID3D11InputLayout* layout)
-		: vsh_(to_com_ptr<ID3D11VertexShader>(vsh))
-		, psh_(to_com_ptr<ID3D11PixelShader>(psh))
-		, layout_(to_com_ptr<ID3D11InputLayout>(layout))
+		: vsh_(to_com_ptr(vsh))
+		, psh_(to_com_ptr(psh))
+		, layout_(to_com_ptr(layout))
 	{
 	}
 
@@ -122,11 +117,11 @@ namespace d3d11 {
 		: primitive_(primitive)
 		, vertices_(vertices)
 		, stride_(stride)
-		, buffer_(to_com_ptr<ID3D11Buffer>(buffer))
+		, buffer_(to_com_ptr(buffer))
 	{
 	}
 
-	void Geometry::bind(std::shared_ptr<Context> const& ctx)
+	void Geometry::bind(shared_ptr<Context> const& ctx)
 	{
 		ctx_ = ctx;
 		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
@@ -156,8 +151,8 @@ namespace d3d11 {
 	Texture2D::Texture2D(
 		ID3D11Texture2D* tex,
 		ID3D11ShaderResourceView* srv)
-		: texture_(to_com_ptr<ID3D11Texture2D>(tex))
-		, srv_(to_com_ptr<ID3D11ShaderResourceView>(srv))
+		: texture_(to_com_ptr(tex))
+		, srv_(to_com_ptr(srv))
 	{
 		share_handle_ = nullptr;
 
@@ -233,7 +228,7 @@ namespace d3d11 {
 		return share_handle_;
 	}
 
-	void Texture2D::copy_from(std::shared_ptr<Texture2D> const& other)
+	void Texture2D::copy_from(shared_ptr<Texture2D> const& other)
 	{
 		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
 		assert(d3d11_ctx);
@@ -244,13 +239,13 @@ namespace d3d11 {
 
 
 	Device::Device(ID3D11Device* pdev, ID3D11DeviceContext* pctx)
-		: device_(to_com_ptr<ID3D11Device>(pdev))
+		: device_(to_com_ptr(pdev))
 		, ctx_(make_shared<Context>(pctx))
 	{
 		_lib_compiler = LoadLibrary(L"d3dcompiler_47.dll");
 	}
 
-	std::shared_ptr<Context> Device::immedidate_context()
+	shared_ptr<Context> Device::immedidate_context()
 	{
 		return ctx_;
 	}
@@ -417,7 +412,7 @@ namespace d3d11 {
 		return make_shared<SwapChain>(swapchain, rtv, sampler, blender);
 	}
 	
-	std::shared_ptr<Geometry> Device::create_quad(
+	shared_ptr<Geometry> Device::create_quad(
 			float x, float y, float width, float height, bool flip)
 	{
 		x = (x * 2.0f) - 1.0f;
@@ -464,7 +459,7 @@ namespace d3d11 {
 		return nullptr;
 	}
 
-	std::shared_ptr<Texture2D> Device::open_shared_texture(void* handle)
+	shared_ptr<Texture2D> Device::open_shared_texture(void* handle)
 	{
 		ID3D11Texture2D* tex = nullptr;
 		auto hr = device_->OpenSharedResource(
@@ -476,7 +471,7 @@ namespace d3d11 {
 		return make_shared<Texture2D>(tex, nullptr);
 	}
 
-	std::shared_ptr<Texture2D> Device::create_texture(
+	shared_ptr<Texture2D> Device::create_texture(
 			int width,
 			int height,
 			DXGI_FORMAT format,
@@ -526,9 +521,9 @@ namespace d3d11 {
 
 
 	shared_ptr<ID3DBlob> Device::compile_shader(
-							std::string const& source_code,
-							std::string const& entry_point,
-							std::string const& model)
+							string const& source_code,
+							string const& entry_point,
+							string const& model)
 	{
 		if (!_lib_compiler) {
 			return nullptr;
@@ -590,7 +585,7 @@ namespace d3d11 {
 	//
 	// create some basic shaders so we can draw a textured-quad
 	//
-	std::shared_ptr<Effect> Device::create_default_effect()
+	shared_ptr<Effect> Device::create_default_effect()
 	{
 		auto const vsh =
 R"--(struct VS_INPUT
@@ -637,13 +632,13 @@ float4 main(VS_OUTPUT input) : SV_Target
 				"ps_4_0");
 	}
 
-	std::shared_ptr<Effect> Device::create_effect(
-		std::string const& vertex_code,
-		std::string const& vertex_entry,
-		std::string const& vertex_model,
-		std::string const& pixel_code,
-		std::string const& pixel_entry,
-		std::string const& pixel_model)
+	shared_ptr<Effect> Device::create_effect(
+		string const& vertex_code,
+		string const& vertex_entry,
+		string const& vertex_model,
+		string const& pixel_code,
+		string const& pixel_entry,
+		string const& pixel_model)
 	{
 		auto const vs_blob = compile_shader(vertex_code, vertex_entry, vertex_model);
 
@@ -690,7 +685,7 @@ float4 main(VS_OUTPUT input) : SV_Target
 	}
 
 
-	std::shared_ptr<Device> create_device()
+	shared_ptr<Device> create_device()
 	{
 		UINT flags = 0;
 #ifdef _DEBUG
