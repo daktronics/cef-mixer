@@ -12,7 +12,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
     * ~~x86 sample binary distribution (Release build only)~~
     * The above sample distributions are not supported official builds - they are intended for testing/demo purposes.
     
-3. From a command prompt set the environment variable CEF_ROOT to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
+3. From a command prompt set the environment variable **CEF_ROOT** to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
 
 ```
 > set CEF_ROOT=<path\to\cef\binary-distribution>
@@ -22,7 +22,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
 Note: if you're building for x86 you will need to modify gen_vs2017.bat to specify the correct generator for CMake
 
 4. Open the build/cefmixer.sln solution in Visual Studio
-    * If using one of the sample binary distributions from step 2 - make sure to change the build configuration to **Release** since the distributions above do not contain Debug versions
+    * If using one of the sample binary distributions from step 2 - make sure to change the build configuration to **Release** since the distributions above do not contain **Debug** versions
 
 5. Build the **ALL_BUILD** project
 
