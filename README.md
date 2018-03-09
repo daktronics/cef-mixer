@@ -49,6 +49,32 @@ Pressing `Ctrl+V` while the application is running can show the HTML view runnin
 
 Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. If the integrating application is doing its own v-sync ... then there shouldn't be any other component in the rendering pipeline that is also doing v-sync.  This demo application passes the command-line arg `disable-gpu-vsync` to Chromium.
 
+## Integration
+The update to CEF proposes the following changes to the API for application integration.
+
+1. Enable the use of shared textures when using window-less rendering (OSR).
+
+```c
+CefWindowInfo info;
+info.windowless_rendering_enabled = true;
+info.shared_textures_enabled = true;
+```
+
+2. Override the new OnAcceleratedPaint method in a CefRenderHandler derived class:
+
+```c
+void OnAcceleratedPaint(
+		CefRefPtr<CefBrowser> browser,
+		PaintElementType type,
+		const RectList& dirtyRects,
+		void* share_handle, 
+		uint64 sync_key) override
+{
+}
+```
+
+OnAcceleratedPaint will be invoked rather than the existing OnPaint when `shared_textures_enabled` is set to true in CefWindowInfo.
+
 ## Room for Improvement
 A future update could include the following 
  * Allow the client application to perform SendBeginFrame by adding a new method to CEF's public interface.
