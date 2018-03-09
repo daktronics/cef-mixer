@@ -60,7 +60,7 @@ info.windowless_rendering_enabled = true;
 info.shared_textures_enabled = true;
 ```
 
-2. Override the new OnAcceleratedPaint method in a CefRenderHandler derived class:
+2. Override the new `OnAcceleratedPaint` method in a `CefRenderHandler` derived class:
 
 ```c
 void OnAcceleratedPaint(
@@ -73,7 +73,7 @@ void OnAcceleratedPaint(
 }
 ```
 
-OnAcceleratedPaint will be invoked rather than the existing OnPaint when `shared_textures_enabled` is set to true in CefWindowInfo.
+`OnAcceleratedPaint` will be invoked rather than the existing OnPaint when `shared_textures_enabled` is set to true in `CefWindowInfo`.
 
 ## Room for Improvement
 A future update could include the following 
