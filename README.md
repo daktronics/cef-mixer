@@ -8,7 +8,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
     * VS 2017 Community Edition is fine - just make sure to install C/C++ development tools
 
 2. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
-    * [x64 sample binary distribution (Release build only)][x64_build]
+    * ~~x64 sample binary distribution (Release build only)]~~ (in-progress)
     * ~~x86 sample binary distribution (Release build only)~~
     * The above sample distributions are not supported official builds - they are intended for testing/demo purposes.
     
@@ -84,7 +84,6 @@ A future update could include the following
      * Not a big deal for CEF applications, since CEF does not use the Reflector concept in Chromium anyway.
  * Take the Chromium changes directly to the Chromium team
      * We can get the job done with the patching system built into CEF to apply Chromium changes, but rather the shared texture FBO probably makes more sense as a pull request on Chromium itself.  Seems only reasonable applications that use Headless-mode in Chromium could also benefit from shared textures.
- * Detailed instructions on the changes required to Chromium and CEF for accelerated OSR can be found [here][changes].
 
 [demo1]: https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png "Cefmixer Demo"
 [demo2]: https://user-images.githubusercontent.com/2717038/36979126-25625fcc-204c-11e8-841d-058d2f53ba91.png "No VSync"
