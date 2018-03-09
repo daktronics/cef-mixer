@@ -25,7 +25,6 @@ LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
 #define ID_WINDOW_VSYNC 100
 
 int sync_interval_ = 1;
-void* window_ = 0;
 
 //
 // simple RIAA for CoInitialize/CoUninitialize
@@ -106,7 +105,6 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		cef_uninitialize();
 		return 0;
 	}
-	window_ = window;
 
 	// create a D3D11 rendering device
 	auto device = d3d11::create_device();

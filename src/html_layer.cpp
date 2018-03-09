@@ -224,7 +224,6 @@ public:
 		int width,
 		int height) override
 	{
-		return;
 	}
 
 	void OnAcceleratedPaint(
@@ -294,8 +293,9 @@ public:
 		CefBrowserSettings& settings,
 		bool* no_javascript_access) override 
 	{
-		windowInfo.SetAsWindowless(nullptr);
-		windowInfo.shared_textures_enabled = true;
+		// todo: add support for accelerated popups in this app
+		//windowInfo.SetAsWindowless(nullptr);
+		//windowInfo.shared_textures_enabled = true;
 
 		return false;
 	}
