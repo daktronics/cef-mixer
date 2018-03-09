@@ -8,7 +8,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
     * VS 2017 Community Edition is fine - just make sure to install C/C++ development tools
 
 2. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
-    * ~~x64 sample binary distribution (Release build only)]~~ (in-progress)
+    * [x64 sample binary distribution (Release build only)][x64_build] (in-progress)
     * ~~x86 sample binary distribution (Release build only)~~
     * The above sample distributions are not supported official builds - they are intended for testing/demo purposes.
     
@@ -87,7 +87,7 @@ A future update could include the following
 
 [demo1]: https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png "Cefmixer Demo"
 [demo2]: https://user-images.githubusercontent.com/2717038/36979126-25625fcc-204c-11e8-841d-058d2f53ba91.png "No VSync"
-[x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3325.1749.gf0dd289_windows64_minimal.7z "x64 Distribution"
+[x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3325.1750.g45dd47e_windows64_minimal.7z "x64 Distribution"
 [pr158]: https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff "Pull Request"
 [changes]: https://github.com/daktronics/cef-mixer/blob/master/CHANGES.md "Walkthrough"
 
