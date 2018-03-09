@@ -24,3 +24,5 @@ std::shared_ptr<T> to_com_ptr(T* obj)
 {
 	return std::shared_ptr<T>(obj, [](T* p) { if (p) p->Release(); });
 }
+
+extern void* window_;

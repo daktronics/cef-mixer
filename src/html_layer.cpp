@@ -224,12 +224,7 @@ public:
 		int width,
 		int height) override
 	{
-	}
-
-	bool CanUseAcceleratedPaint(
-		CefRefPtr<CefBrowser> /*browser*/) override
-	{
-		return true; // we do support OnAcceleratedPaint
+		return;
 	}
 
 	void OnAcceleratedPaint(
@@ -239,6 +234,10 @@ public:
 		void* share_handle, 
 		uint64 sync_key) override
 	{
+		if (type == PET_POPUP) {
+			return;
+		}
+
 		frame_++;
 
 		auto const now = time_now();
@@ -281,6 +280,24 @@ public:
 				browser_ = browser;
 			}
 		}
+	}
+
+	bool OnBeforePopup(CefRefPtr<CefBrowser> browser,
+		CefRefPtr<CefFrame> frame,
+		const CefString& target_url,
+		const CefString& target_frame_name,
+		WindowOpenDisposition target_disposition,
+		bool user_gesture,
+		const CefPopupFeatures& popupFeatures,
+		CefWindowInfo& windowInfo,
+		CefRefPtr<CefClient>& client,
+		CefBrowserSettings& settings,
+		bool* no_javascript_access) override 
+	{
+		windowInfo.SetAsWindowless(nullptr);
+		windowInfo.shared_textures_enabled = true;
+
+		return false;
 	}
 
 	shared_ptr<d3d11::Texture2D> texture(shared_ptr<d3d11::Context> const& ctx)
@@ -344,6 +361,7 @@ shared_ptr<Layer> create_html_layer(
 {
 	CefWindowInfo winfo;
 	winfo.windowless_rendering_enabled = true;
+	winfo.shared_textures_enabled = true;
 	winfo.parent_window = nullptr;
 
 	CefBrowserSettings settings;
