@@ -9,17 +9,17 @@
 
 using namespace std;
 
-LARGE_INTEGER _qi_freq = {};
+LARGE_INTEGER qi_freq_ = {};
 
 uint64_t time_now()
 {
-	if (!_qi_freq.HighPart && !_qi_freq.LowPart) {
-		QueryPerformanceFrequency(&_qi_freq);
+	if (!qi_freq_.HighPart && !qi_freq_.LowPart) {
+		QueryPerformanceFrequency(&qi_freq_);
 	}
 	LARGE_INTEGER t = {};
 	QueryPerformanceCounter(&t);
 	return static_cast<uint64_t>(
-		(t.QuadPart / double(_qi_freq.QuadPart)) * 1000000);
+		(t.QuadPart / double(qi_freq_.QuadPart)) * 1000000);
 }
 
 void log_message(const char* msg, ...)
@@ -36,7 +36,7 @@ void log_message(const char* msg, ...)
 }
 
 //
-// quick and dirty conversion from UCS-2 (wide-char) string to 
+// quick and dirty conversion from utf-16 (wide-char) string to 
 // utf8 string for Windows
 //
 string to_utf8(const wchar_t* utf16)
