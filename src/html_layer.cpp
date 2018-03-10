@@ -62,7 +62,7 @@ public:
 	}
 
 	//
-	// called in response to Cef's OnPaint notification
+	// called in response to Cef's OnAcceleratedPaint notification
 	//
 	void on_paint(void* shared_handle, uint64_t sync_key)
 	{
@@ -359,10 +359,9 @@ shared_ptr<Layer> create_html_layer(
 	int width, 
 	int height)
 {
-	CefWindowInfo winfo;
-	winfo.windowless_rendering_enabled = true;
-	winfo.shared_textures_enabled = true;
-	winfo.parent_window = nullptr;
+	CefWindowInfo window_info;
+	window_info.SetAsWindowless(nullptr);
+	window_info.shared_textures_enabled = true;
 
 	CefBrowserSettings settings;
 
@@ -372,7 +371,7 @@ shared_ptr<Layer> create_html_layer(
 	CefRefPtr<HtmlView> view(new HtmlView(device, width, height));
 
 	CefBrowserHost::CreateBrowser(
-			winfo, 
+			window_info,
 			view, 
 			url, 
 			settings, 
