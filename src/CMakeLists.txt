@@ -1,5 +1,6 @@
 
 set(ALL_SRCS
+	app.rc
 	composition.h
 	composition.cpp	
 	d3d11.h
@@ -8,6 +9,7 @@ set(ALL_SRCS
 	html_layer.cpp
 	main.cpp
 	platform.h
+	resource.h
 	util.cpp
 	util.h
 )

@@ -4,9 +4,7 @@
 #include "d3d11.h"
 #include "composition.h"
 
-#pragma comment(linker,"\"/manifestdependency:type='win32' \
-				name='Microsoft.Windows.Common-Controls' version='6.0.0.0' \
-				processorArchitecture='*' publicKeyToken='6595b64144ccf1df' language='*'\"")
+#include "resource.h"
 
 //
 // if we're running on a system with hybrid graphics ... 
@@ -21,8 +19,6 @@ extern "C"
 				
 HWND create_window(HINSTANCE, LPCWSTR, int width, int height);
 LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
-
-#define ID_WINDOW_VSYNC 100
 
 int sync_interval_ = 1;
 
@@ -152,12 +148,9 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		auto fps_start = time_now();
 		uint32_t frame = 0;
 
-		ACCEL accelerators[1];
-		accelerators[0].cmd = ID_WINDOW_VSYNC;
-		accelerators[0].fVirt = FCONTROL | FVIRTKEY;
-		accelerators[0].key = static_cast<WORD>('V');
-		HACCEL accel_table = CreateAcceleratorTable(
-			accelerators, sizeof(accelerators) / sizeof(accelerators[0]));
+		// load keyboard accelerators
+		HACCEL accel_table = 
+			LoadAccelerators(instance, MAKEINTRESOURCE(IDR_APPLICATION));
 
 		auto ctx = device->immedidate_context();
 

@@ -402,7 +402,7 @@ int cef_initialize(HINSTANCE instance)
 #if defined(NDEBUG)
 	settings.single_process = false;
 #else
-	settings.single_process = true;
+	//settings.single_process = true;
 #endif
 
 	app_ = CefRefPtr<HtmlApp>(new HtmlApp());
