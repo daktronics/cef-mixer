@@ -3,7 +3,6 @@
 
 #include <d3dcompiler.h>
 #include <directxmath.h>
-#include <d3d11_4.h>
 
 using namespace std;
 
@@ -734,16 +733,7 @@ float4 main(VS_OUTPUT input) : SV_Target
 				&pctx);
 		}
 		
-		if (SUCCEEDED(hr)) 
-		{
-			ID3D11Multithread* multithread = nullptr;
-			if (SUCCEEDED(pdev->QueryInterface(__uuidof(ID3D11Multithread),
-				reinterpret_cast<void**>(&multithread))))
-			{
-				//multithread->SetMultithreadProtected(TRUE);
-				multithread->Release();			
-			}
-
+		if (SUCCEEDED(hr)) {
 			return make_shared<Device>(pdev, pctx);
 		}
 
