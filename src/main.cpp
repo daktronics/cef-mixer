@@ -17,7 +17,7 @@ extern "C"
 }
 				
 				
-HWND create_window(HINSTANCE, LPCWSTR, int width, int height);
+HWND create_window(HINSTANCE, std::string const& title, int width, int height);
 LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
 
 int sync_interval_ = 1;
@@ -93,9 +93,11 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	// this demo uses WIC to load images .. so we need COM
 	ComInitializer com_init;
 
+	std::string title("CEF OSR Mixer - ");
+	title.append(cef_version());
+
 	// create a window with our specific size
-	auto const window = create_window(
-		instance, L"CEF Accelerated-OSR Mixer", width, height);
+	auto const window = create_window(instance, title, width, height);
 	if (!IsWindow(window)) {
 		assert(0);
 		cef_uninitialize();
@@ -195,7 +197,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	return 0;
 }
 
-HWND create_window(HINSTANCE instance, LPCWSTR title, int width, int height)
+HWND create_window(HINSTANCE instance, std::string const& title, int width, int height)
 {
 	LPCWSTR class_name = L"_main_window_";
 
@@ -217,7 +219,7 @@ HWND create_window(HINSTANCE instance, LPCWSTR title, int width, int height)
 	}
 
 	auto const hwnd = CreateWindow(class_name,
-						title,
+						to_utf16(title).c_str(),
 						WS_OVERLAPPEDWINDOW,
 						CW_USEDEFAULT, 0, CW_USEDEFAULT, 0, 
 						nullptr, 

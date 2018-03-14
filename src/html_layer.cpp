@@ -3,6 +3,7 @@
 #include <include/cef_app.h>
 #include <include/cef_browser.h>
 #include <include/cef_client.h>
+#include <include/cef_version.h>
 
 #include <mutex>
 #include <condition_variable>
@@ -523,5 +524,20 @@ int cef_initialize(HINSTANCE instance)
 void cef_uninitialize()
 {
 	CefModule::shutdown();
+}
+
+//
+// return the CEF + Chromium version
+//
+string cef_version()
+{
+	ostringstream ver;
+	ver << "CEF: " << 
+		CEF_VERSION << " (Chromium: "
+		<< CHROME_VERSION_MAJOR << "."
+		<< CHROME_VERSION_MINOR << "."
+		<< CHROME_VERSION_BUILD << "."
+		<< CHROME_VERSION_PATCH << ")";
+	return ver.str();
 }
 

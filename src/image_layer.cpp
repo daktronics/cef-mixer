@@ -38,7 +38,7 @@ shared_ptr<Layer> create_image_layer(
 		return nullptr;
 	}
 
-	auto const wfilename = to_utf16(filename.c_str());
+	auto const wfilename = to_utf16(filename);
 
 	IWICImagingFactory* pwic = nullptr;
 

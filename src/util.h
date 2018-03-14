@@ -9,7 +9,9 @@ uint64_t time_now();
 void log_message(const char*, ...);
 
 std::string to_utf8(const wchar_t*);
+std::string to_utf8(std::wstring const&);
 std::wstring to_utf16(const char*);
+std::wstring to_utf16(std::string const&);
 
 int to_int(std::string, int default_val);
 

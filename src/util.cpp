@@ -35,6 +35,11 @@ void log_message(const char* msg, ...)
 	}
 }
 
+string to_utf8(wstring const& utf16)
+{
+	return to_utf8(utf16.c_str());
+}
+
 //
 // quick and dirty conversion from utf-16 (wide-char) string to 
 // utf8 string for Windows
@@ -59,6 +64,11 @@ string to_utf8(const wchar_t* utf16)
 		return string();
 	}
 	return string(utf8.get(), cb);
+}
+
+std::wstring to_utf16(string const& utf8)
+{
+	return to_utf16(utf8.c_str());
 }
 
 //
