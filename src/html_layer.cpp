@@ -7,6 +7,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <atomic>
+#include <thread>
 #include <sstream>
 #include <iomanip>
 
@@ -30,7 +31,6 @@ public:
 		CefRefPtr<CefCommandLine> command_line) override
 	{
 		command_line->AppendSwitch("disable-gpu-vsync");
-		//command_line->AppendSwitch("enable-begin-frame-scheduling");
 	}
 
 	virtual void OnContextInitialized() override
@@ -38,10 +38,9 @@ public:
 	}
 
 private:
+
 	IMPLEMENT_REFCOUNTING(HtmlApp);
 };
-
-CefRefPtr<HtmlApp> app_;
 
 
 class FrameBuffer
@@ -183,8 +182,7 @@ public:
 		fps_start_ = 0ull;
 	}
 
-	~HtmlView()
-	{
+	~HtmlView() {
 		close();
 	}
 
@@ -204,15 +202,15 @@ public:
 		if (browser.get()) {
 			browser->GetHost()->CloseBrowser(true);
 		}
+
+		log_message("html view is closed\n");
 	}
 
-	CefRefPtr<CefRenderHandler> GetRenderHandler() override 
-	{ 
+	CefRefPtr<CefRenderHandler> GetRenderHandler() override { 
 		return this; 
 	}
 
-	CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override 
-	{ 
+	CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { 
 		return this; 
 	}
 
@@ -224,6 +222,7 @@ public:
 		int width,
 		int height) override
 	{
+		// this application doesn't support software rasterizing
 	}
 
 	void OnAcceleratedPaint(
@@ -351,6 +350,124 @@ private:
 };
 
 //
+// Lifetime management for CEF components.  
+//
+// Manages the CEF message loop and CefInitialize/CefShutdown
+//
+class CefModule
+{
+public:
+	CefModule(HINSTANCE mod) : module_(mod) {
+		ready_ = false;
+	}
+
+	static void startup(HINSTANCE);
+	static void shutdown();
+
+private:
+
+	//
+	// simple CefTask we'll post to our message-pump 
+	// thread to stop it (required to break out of CefRunMessageLoop)
+	//
+	class QuitTask : public CefTask
+	{
+	public:
+		QuitTask() { }
+		void Execute() override {
+			CefQuitMessageLoop();
+		}
+		IMPLEMENT_REFCOUNTING(QuitTask);
+	};
+
+	void message_loop();
+
+	condition_variable signal_;
+	atomic_bool ready_;
+	mutex lock_;
+	HINSTANCE const module_;
+	shared_ptr<thread> thread_;
+	static shared_ptr<CefModule> instance_;
+};
+
+std::shared_ptr<CefModule> CefModule::instance_;
+
+void CefModule::startup(HINSTANCE mod)
+{
+	assert(!instance_.get());
+	instance_ = make_shared<CefModule>(mod);
+	instance_->thread_ = make_shared<thread>(
+		bind(&CefModule::message_loop, instance_.get()));
+
+	{ // wait for message loop to initialize
+
+		unique_lock<mutex> lock(instance_->lock_);
+		weak_ptr<CefModule> weak_self(instance_);
+		instance_->signal_.wait(lock, [weak_self]() {
+			auto const mod = weak_self.lock();
+			if (mod) {
+				return mod->ready_.load();
+			}
+			return true;
+		});
+	}
+
+	log_message("cef module is ready\n");
+}
+
+void CefModule::shutdown()
+{
+	assert(instance_.get());
+	if (instance_)
+	{
+		if (instance_->thread_)
+		{
+			CefRefPtr<CefTask> task(new QuitTask());
+			CefPostTask(TID_UI, task.get());
+			instance_->thread_->join();
+			instance_->thread_.reset();
+		}
+		instance_.reset();
+	}
+}
+
+void CefModule::message_loop()
+{
+	log_message("cef initializing ... \n");
+
+	CefSettings settings;
+	settings.no_sandbox = true;
+	settings.multi_threaded_message_loop = false;
+	settings.windowless_rendering_enabled = true;
+
+#if defined(NDEBUG)
+	settings.single_process = false;
+#else
+	// ~RenderProcessHostImpl() complains about DCHECK(is_self_deleted_)
+	// when we run single process mode ... I haven't figured out how to resolve yet
+	//settings.single_process = true;
+#endif
+
+	CefRefPtr<HtmlApp> app(new HtmlApp());
+
+	CefMainArgs main_args(module_);
+	CefInitialize(main_args, settings, app, nullptr);
+
+	log_message("cef is initialized.\n");
+
+	// signal cef is initialized and ready
+	ready_ = true;
+	signal_.notify_one();
+	
+	CefRunMessageLoop();
+
+	log_message("cef shutting down ... \n");
+
+	CefShutdown();
+	log_message("cef is shutdown\n");
+}
+
+//
 // use CEF to load and render a web page within a layer
 //
 shared_ptr<Layer> create_html_layer(
@@ -380,47 +497,31 @@ shared_ptr<Layer> create_html_layer(
 	return make_shared<HtmlLayer>(device, view);
 }
 
+//
+// public method to setup CEF for this application
+//
 int cef_initialize(HINSTANCE instance)
 {
 	CefEnableHighDPISupport();
 
 	CefMainArgs main_args(instance);
 
-	app_ = CefRefPtr<HtmlApp>(new HtmlApp());
-
-	int exit_code = CefExecuteProcess(main_args, app_, nullptr);
+	int exit_code = CefExecuteProcess(main_args, nullptr, nullptr);
 	if (exit_code >= 0) {
 		return exit_code;
 	}
 
 	//MessageBox(0, L"Attach Debugger", L"CEF OSR", MB_OK);
 
-	CefSettings settings;
-	settings.no_sandbox = true;
-	settings.multi_threaded_message_loop = true;
-
-#if defined(NDEBUG)
-	settings.single_process = false;
-#else
-	//settings.single_process = true;
-#endif
-
-	app_ = CefRefPtr<HtmlApp>(new HtmlApp());
-
-	CefInitialize(main_args, settings, app_, nullptr);
-	
+	CefModule::startup(instance);
 	return -1;
 }
 
+//
+// public method to tear-down CEF ... call before your main() function exits
+//
 void cef_uninitialize()
 {
-	CefShutdown();
-}
-
-void cef_do_message_work()
-{
-	if (app_.get()) {
-		CefDoMessageLoopWork();
-	}
+	CefModule::shutdown();
 }
 

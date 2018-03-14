@@ -51,7 +51,6 @@ private:
 
 int cef_initialize(HINSTANCE);
 void cef_uninitialize();
-void cef_do_message_work();
 
 // create a layer to show a image
 std::shared_ptr<Layer> create_image_layer(
