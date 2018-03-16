@@ -107,7 +107,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	//
 	// default the grid param to 1 .. 1x1 (single layer)
 	//
-	// if grid=2x2 then a 2x2 grid of html views
+	// if grid=2x2 then a 2x2 grid of html views will be added
 	//
 	// +-------+-------+
 	// |       |       |
@@ -156,7 +156,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		// create a composition to represent our 2D-scene
 		auto const composition = std::make_shared<Composition>(device);
 
-		// create a grid of html layer(s) depending on our --tile option
+		// create a grid of html layer(s) depending on our --grid option
 		// (easy way to test several active views)		
 		float cx = 1.0f / grid_x;
 		float cy = 1.0f / grid_y;
