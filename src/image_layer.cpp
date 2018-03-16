@@ -80,7 +80,7 @@ shared_ptr<Layer> create_image_layer(
 	if (FAILED(hr)) {
 		return nullptr;
 	}
-	auto const converter(pcnv);
+	auto const converter = to_com_ptr(pcnv);
 
 	hr = converter->Initialize(
 			frame.get(), GUID_WICPixelFormat32bppPRGBA, 
