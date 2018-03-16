@@ -47,7 +47,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	std::string url;
 	int width = 0;
 	int height = 0;
-	int tile = 1;
+	int tile_x = 1;
+	int tile_y = 1;
 
 	// read options from the command-line
 	int args;
@@ -76,7 +77,16 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 						height = to_int(value, 0);
 					}
 					else if (key == "tile") {
-						tile = to_int(value, 0);
+
+						// split on x (eg. 2x3)
+						auto const c = value.find('x');
+						if (c != std::string::npos) {
+							tile_x = to_int(value.substr(0, c), 0);
+							tile_y = to_int(value.substr(c + 1), 0);
+						}
+						else {
+							tile_x = tile_y = to_int(value, 0);
+						}
 					}
 				}
 			}
@@ -97,18 +107,19 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	//
 	// default the tile param to 1 .. 1x1 (single layer)
 	//
-	// if tile=2 then a 2x2 grid of html views
+	// if tile=2x2 then a 2x2 grid of html views
 	//
 	// +-------+-------+
 	// |       |       |
 	// +-------+-------+
 	// |       |       |
 	// +-------+-------+
-	//
-	// 3 = 3x3, 4 = 4x4 ... and so on
 	//	
-	if (tile <= 0) {
-		tile = 1;
+	if (tile_x <= 0) {
+		tile_x = 1;
+	}
+	if (tile_y <= 0) {
+		tile_y = 1;
 	}
 
 	// this demo uses WIC to load images .. so we need COM
@@ -147,17 +158,17 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 
 		// create a grid of html layer(s) depending on our --tile option
 		// (easy way to test several active views)		
-		float size = 1.0f / tile;
-		for (int x = 0; x < tile; ++x)
+		float cx = 1.0f / tile_x;
+		float cy = 1.0f / tile_y;
+		for (int x = 0; x < tile_x; ++x)
 		{
-			for (int y = 0; y < tile; ++y)
+			for (int y = 0; y < tile_y; ++y)
 			{
-				// create a html layer
 				auto const html = create_html_layer(device, url, width, height);
 				if (html)
 				{
 					composition->add_layer(html);
-					html->move(x * size, y * size, size, size);
+					html->move(x * cx, y * cy, cx, cy);
 				}
 			}
 		}
