@@ -47,8 +47,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	std::string url;
 	int width = 0;
 	int height = 0;
-	int tile_x = 1;
-	int tile_y = 1;
+	int grid_x = 1;
+	int grid_y = 1;
 
 	// read options from the command-line
 	int args;
@@ -76,16 +76,16 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 					else if (key == "height") {
 						height = to_int(value, 0);
 					}
-					else if (key == "tile") {
+					else if (key == "grid") {
 
 						// split on x (eg. 2x3)
 						auto const c = value.find('x');
 						if (c != std::string::npos) {
-							tile_x = to_int(value.substr(0, c), 0);
-							tile_y = to_int(value.substr(c + 1), 0);
+							grid_x = to_int(value.substr(0, c), 0);
+							grid_y = to_int(value.substr(c + 1), 0);
 						}
 						else {
-							tile_x = tile_y = to_int(value, 0);
+							grid_x = grid_y = to_int(value, 0);
 						}
 					}
 				}
@@ -105,9 +105,9 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	}
 	
 	//
-	// default the tile param to 1 .. 1x1 (single layer)
+	// default the grid param to 1 .. 1x1 (single layer)
 	//
-	// if tile=2x2 then a 2x2 grid of html views
+	// if grid=2x2 then a 2x2 grid of html views
 	//
 	// +-------+-------+
 	// |       |       |
@@ -115,11 +115,11 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	// |       |       |
 	// +-------+-------+
 	//	
-	if (tile_x <= 0) {
-		tile_x = 1;
+	if (grid_x <= 0) {
+		grid_x = 1;
 	}
-	if (tile_y <= 0) {
-		tile_y = 1;
+	if (grid_y <= 0) {
+		grid_y = 1;
 	}
 
 	// this demo uses WIC to load images .. so we need COM
@@ -158,11 +158,11 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 
 		// create a grid of html layer(s) depending on our --tile option
 		// (easy way to test several active views)		
-		float cx = 1.0f / tile_x;
-		float cy = 1.0f / tile_y;
-		for (int x = 0; x < tile_x; ++x)
+		float cx = 1.0f / grid_x;
+		float cy = 1.0f / grid_y;
+		for (int x = 0; x < grid_x; ++x)
 		{
-			for (int y = 0; y < tile_y; ++y)
+			for (int y = 0; y < grid_y; ++y)
 			{
 				auto const html = create_html_layer(device, url, width, height);
 				if (html)
