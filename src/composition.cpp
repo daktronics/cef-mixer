@@ -56,6 +56,13 @@ void Composition::add_layer(std::shared_ptr<Layer> const& layer)
 	}
 }
 
+void Composition::resize(int width, int height)
+{
+	for (auto const& layer : layers_) {
+		layer->resize(width, height);
+	}
+}
+
 void Composition::render(shared_ptr<d3d11::Context> const& ctx)
 {
 	// pretty simple ... just use painter's algorithm and render 

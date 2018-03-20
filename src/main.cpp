@@ -21,6 +21,7 @@ HWND create_window(HINSTANCE, std::string const& title, int width, int height);
 LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
 
 int sync_interval_ = 1;
+std::shared_ptr<Composition> composition_;
 
 //
 // simple RIAA for CoInitialize/CoUninitialize
@@ -154,7 +155,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 
 	{
 		// create a composition to represent our 2D-scene
-		auto const composition = std::make_shared<Composition>(device);
+		composition_ = std::make_shared<Composition>(device);
 
 		// create a grid of html layer(s) depending on our --grid option
 		// (easy way to test several active views)		
@@ -167,7 +168,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				auto const html = create_html_layer(device, url, width, height);
 				if (html)
 				{
-					composition->add_layer(html);
+					composition_->add_layer(html);
 					html->move(x * cx, y * cy, cx, cy);
 				}
 			}
@@ -180,7 +181,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 			auto const img = create_image_layer(device, *overlay);
 			if (img)
 			{
-				composition->add_layer(img);
+				composition_->add_layer(img);
 				img->move(0.0f, 0.0f, 1.0f, 1.0f);
 			}
 		}
@@ -216,7 +217,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				swapchain->clear(0.0f, 0.0f, 1.0f, 1.0f);
 
 				// render our scene
-				composition->render(ctx);
+				composition_->render(ctx);
 
 				// present to window
 				swapchain->present(sync_interval_);
@@ -232,6 +233,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				}
 			}
 		}
+
+		composition_.reset();
 	}
 
 	cef_uninitialize();
@@ -300,7 +303,11 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			break;
 
 		case WM_SIZE:
-			// todo: resize the swapchain here
+			if (composition_) {
+				const auto width = LOWORD(lparam);
+				const auto height = HIWORD(lparam);
+				composition_->resize(width, height);
+			}
 			break;
 
 		case WM_DESTROY:

@@ -305,6 +305,13 @@ public:
 		return frame_buffer_->swap(ctx);
 	}
 
+	void resize(int width, int height)
+	{
+		width_ = width;
+		height_ = height;
+		browser_->GetHost()->WasResized();
+	}
+
 private:
 	IMPLEMENT_REFCOUNTING(HtmlView);
 
@@ -342,6 +349,13 @@ public:
 		{
 			// simply use the base class method to draw our texture
 			render_texture(ctx, view_->texture(ctx));
+		}
+	}
+
+	void resize(int width, int height) override
+	{
+		if (view_) {
+			view_->resize(width, height);
 		}
 	}
 

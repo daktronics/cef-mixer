@@ -16,6 +16,7 @@ public:
 
 	virtual void move(float x, float y, float width, float height);	
 	virtual void render(std::shared_ptr<d3d11::Context> const&) = 0;
+	virtual void resize(int width, int height) {}
 
 protected:
 
@@ -42,6 +43,7 @@ public:
 
 	void render(std::shared_ptr<d3d11::Context> const&);
 	void add_layer(std::shared_ptr<Layer> const& layer);
+	void resize(int width, int height);
 
 private:
 
