@@ -2,21 +2,47 @@
 
 using namespace std;
 
-Layer::Layer(std::shared_ptr<d3d11::Device> const& device, bool flip)
+Layer::Layer(shared_ptr<d3d11::Device> const& device, bool flip)
 	: device_(device)
 	, flip_(flip)
 {
+	bounds_.x = bounds_.y = bounds_.width = bounds_.height = 0.0f;
 }
 
 Layer::~Layer() 
 {
 }
 
+void Layer::attach(std::shared_ptr<Composition> const& parent)
+{
+	composition_ = parent;
+}
+
+shared_ptr<Composition> Layer::composition() const
+{
+	return composition_.lock();
+}
+
+Rect Layer::bounds() const
+{
+	return bounds_;
+}
+
 void Layer::move(float x, float y, float width, float height)
 {	
+	bounds_.x = x;
+	bounds_.y = y;
+	bounds_.width = width;
+	bounds_.height = height;
+
 	// obviously, it is not efficient to create the quad everytime we
 	// move ... but for now we're just trying to get something on-screen
-	geometry_ = device_->create_quad(x, y, width, height, flip_);
+	geometry_.reset();
+}
+
+void Layer::tick(double)
+{
+	// nothing to update in the base class
 }
 
 //
@@ -26,6 +52,11 @@ void Layer::render_texture(
 		shared_ptr<d3d11::Context> const& ctx, 
 		shared_ptr<d3d11::Texture2D> const& texture)
 {
+	if (!geometry_) {
+		geometry_ = device_->create_quad(bounds_.x, 
+			bounds_.y, bounds_.width, bounds_.height, flip_);
+	}
+	
 	if (geometry_ && texture)
 	{
 		// we need a shader
@@ -44,22 +75,34 @@ void Layer::render_texture(
 }
 
 
-Composition::Composition(std::shared_ptr<d3d11::Device> const& device)
-	: device_(device)
+Composition::Composition(shared_ptr<d3d11::Device> const& device,
+	int width, int height)
+	: width_(width)
+	, height_(height)
+	, device_(device)
 {
 }
 
-void Composition::add_layer(std::shared_ptr<Layer> const& layer)
+void Composition::add_layer(shared_ptr<Layer> const& layer)
 {
 	if (layer) {
 		layers_.push_back(layer);
+
+		// attach ourself as the parent
+		layer->attach(shared_from_this());
 	}
 }
 
 void Composition::resize(int width, int height)
 {
+	width_ = width;
+	height_ = height;
+}
+
+void Composition::tick(double t)
+{
 	for (auto const& layer : layers_) {
-		layer->resize(width, height);
+		layer->tick(t);
 	}
 }
 

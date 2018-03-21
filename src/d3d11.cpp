@@ -81,6 +81,59 @@ namespace d3d11 {
 
 	void SwapChain::resize(int width, int height)
 	{
+		if (width <= 0 || height <= 0) {
+			return;
+		}
+
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
+		assert(d3d11_ctx);
+
+		d3d11_ctx->OMSetRenderTargets(0, 0, 0);
+		rtv_.reset();
+
+		DXGI_SWAP_CHAIN_DESC desc;
+		swapchain_->GetDesc(&desc);
+		auto hr = swapchain_->ResizeBuffers(0, width, height, desc.BufferDesc.Format, desc.Flags);
+		if (FAILED(hr)) {
+			log_message("failed to resize swapchain (%dx%d)\n", width, height);
+			return;
+		}
+
+		ID3D11Texture2D* buffer = nullptr;
+		hr = swapchain_->GetBuffer(0, __uuidof(ID3D11Texture2D), (void**)&buffer);
+		if (FAILED(hr)) {
+			log_message("failed to resize swapchain (%dx%d)\n", width, height);
+			return;
+		}
+		
+		ID3D11Device* dev = nullptr;
+		d3d11_ctx->GetDevice(&dev);
+		if (dev)
+		{
+			D3D11_RENDER_TARGET_VIEW_DESC vdesc = {};
+			vdesc.ViewDimension = D3D11_RTV_DIMENSION_TEXTURE2D;
+			vdesc.Texture2D.MipSlice = 0;
+			vdesc.Format = desc.BufferDesc.Format;
+				
+			ID3D11RenderTargetView* view = nullptr;
+			hr = dev->CreateRenderTargetView(buffer, &vdesc, &view);
+			if (SUCCEEDED(hr))
+			{
+				rtv_ = to_com_ptr(view);
+				d3d11_ctx->OMSetRenderTargets(1, &view, nullptr);
+			}
+			dev->Release();
+		}
+		buffer->Release();
+
+		D3D11_VIEWPORT vp;
+		vp.Width = static_cast<float>(width);
+		vp.Height = static_cast<float>(height);
+		vp.MinDepth = D3D11_MIN_DEPTH;
+		vp.MaxDepth = D3D11_MAX_DEPTH;
+		vp.TopLeftX = 0;
+		vp.TopLeftY = 0;
+		d3d11_ctx->RSSetViewports(1, &vp);
 	}
 
 

@@ -21,7 +21,7 @@ HWND create_window(HINSTANCE, std::string const& title, int width, int height);
 LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
 
 int sync_interval_ = 1;
-std::shared_ptr<Composition> composition_;
+bool resize_ = false;
 
 //
 // simple RIAA for CoInitialize/CoUninitialize
@@ -155,7 +155,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 
 	{
 		// create a composition to represent our 2D-scene
-		composition_ = std::make_shared<Composition>(device);
+		auto const composition = std::make_shared<Composition>(device, width, height);
 
 		// create a grid of html layer(s) depending on our --grid option
 		// (easy way to test several active views)		
@@ -168,7 +168,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				auto const html = create_html_layer(device, url, width, height);
 				if (html)
 				{
-					composition_->add_layer(html);
+					composition->add_layer(html);
 					html->move(x * cx, y * cy, cx, cy);
 				}
 			}
@@ -181,7 +181,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 			auto const img = create_image_layer(device, *overlay);
 			if (img)
 			{
-				composition_->add_layer(img);
+				composition->add_layer(img);
 				img->move(0.0f, 0.0f, 1.0f, 1.0f);
 			}
 		}
@@ -198,6 +198,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 
 		auto ctx = device->immedidate_context();
 
+		auto const start_time = time_now();
+
 		// main message pump for our application
 		MSG msg = {};
 		while (msg.message != WM_QUIT)
@@ -212,12 +214,33 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 			}
 			else
 			{
-				// clear the render-target
+				// update composition + layers based on time
+				auto const t = (time_now() - start_time) / 1000000.0;
+				composition->tick(t);
+
 				swapchain->bind(ctx);
+
+				// is there a request to resize ... if so, resize
+				// both the swapchain and the composition
+				if (resize_) 
+				{
+					RECT rc;
+					GetClientRect(window, &rc);
+					width = rc.right - rc.left;
+					height = rc.bottom - rc.top;
+					if (width && height)
+					{
+						resize_ = false;
+						composition->resize(width, height);
+						swapchain->resize(width, height);
+					}
+				}
+
+				// clear the render-target
 				swapchain->clear(0.0f, 0.0f, 1.0f, 1.0f);
 
 				// render our scene
-				composition_->render(ctx);
+				composition->render(ctx);
 
 				// present to window
 				swapchain->present(sync_interval_);
@@ -233,8 +256,6 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				}
 			}
 		}
-
-		composition_.reset();
 	}
 
 	cef_uninitialize();
@@ -302,12 +323,9 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			}
 			break;
 
-		case WM_SIZE:
-			if (composition_) {
-				const auto width = LOWORD(lparam);
-				const auto height = HIWORD(lparam);
-				composition_->resize(width, height);
-			}
+		case WM_SIZE: 
+			// signal that we want a resize of output
+			resize_ = true;
 			break;
 
 		case WM_DESTROY:

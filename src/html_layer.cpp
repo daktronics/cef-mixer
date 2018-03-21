@@ -11,6 +11,9 @@
 #include <thread>
 #include <sstream>
 #include <iomanip>
+#include <functional>
+#include <map>
+
 
 #include "util.h"
 
@@ -172,9 +175,7 @@ class HtmlView : public CefClient,
 	public CefLifeSpanHandler
 {
 public:
-	HtmlView(std::shared_ptr<d3d11::Device> const& device, 
-			int width, 
-			int height)
+	HtmlView(std::shared_ptr<d3d11::Device> const& device, int width, int height)
 		: width_(width)
 		, height_(height)
 		, frame_buffer_(make_shared<FrameBuffer>(device))
@@ -307,9 +308,15 @@ public:
 
 	void resize(int width, int height)
 	{
-		width_ = width;
-		height_ = height;
-		browser_->GetHost()->WasResized();
+		// only signal change if necessary
+		if (width != width_ || height != height_)
+		{
+			width_ = width;
+			height_ = height;
+			browser_->GetHost()->WasResized();
+
+			log_message("html resize - %dx%d\n", width, height);
+		}
 	}
 
 private:
@@ -343,19 +350,33 @@ public:
 		}
 	}
 
+	void tick(double t) override
+	{
+		auto const comp = composition();
+		if (comp && view_)
+		{
+			// The bounding box for this layer is in normalized coordinates,
+			// the html view needs to know pixel size...so we convert from normalized
+			// to pixels based on the composition dimensions (which are in pixels).
+			//
+			// Note: it is safe to call resize() on the view repeatedly since
+			// it will ignore the call if the requested size is the same
+
+			auto const rect = bounds();
+			auto const width = static_cast<int>(rect.width * comp->width());
+			auto const height = static_cast<int>(rect.height * comp->height());
+			view_->resize(width, height);		
+		}
+
+		Layer::tick(t);
+	}
+
 	void render(shared_ptr<d3d11::Context> const& ctx) override
 	{
 		if (view_) 
 		{
 			// simply use the base class method to draw our texture
 			render_texture(ctx, view_->texture(ctx));
-		}
-	}
-
-	void resize(int width, int height) override
-	{
-		if (view_) {
-			view_->resize(width, height);
 		}
 	}
 
@@ -488,8 +509,7 @@ void CefModule::message_loop()
 shared_ptr<Layer> create_html_layer(
 	std::shared_ptr<d3d11::Device> const& device,
 	string const& url,
-	int width, 
-	int height)
+	int width, int height)
 {
 	CefWindowInfo window_info;
 	window_info.SetAsWindowless(nullptr);
