@@ -34,6 +34,10 @@ public:
 		CefString const& /*process_type*/,
 		CefRefPtr<CefCommandLine> command_line) override
 	{
+		// this application uses the method SendExternalBeginFrame
+		// so currently the following flag is required to get Chromium
+		// to utilize the ExternalBeginFrame .. this should be temporary
+
 		command_line->AppendSwitch("disable-gpu-vsync");
 	}
 
@@ -306,16 +310,47 @@ public:
 		return frame_buffer_->swap(ctx);
 	}
 
+	void tick(double t)
+	{
+		decltype(browser_) browser;
+		{
+			lock_guard<mutex> guard(lock_);
+			browser = browser_;
+		}
+
+		if (browser) {
+		
+			// all times for SendExternalBeginFrame are in microseconds
+			// these params should correspond with viz::BeginFrameArgs in Chromium
+	
+			int64_t time_us = 0;     // 0 = just use default Chromium timestamp
+			int64_t deadline_us = 0; // 0 = don't care yet; just go fast
+			int64_t interval_us = 0; // 0 = don't care yet about interval; just go fast
+
+			browser->GetHost()->SendExternalBeginFrame(
+					time_us, deadline_us, interval_us);
+		}
+	}
+
 	void resize(int width, int height)
 	{
 		// only signal change if necessary
 		if (width != width_ || height != height_)
 		{
+			decltype(browser_) browser;
+			{
+				lock_guard<mutex> guard(lock_);
+				browser = browser_;
+			}
+
 			width_ = width;
 			height_ = height;
-			browser_->GetHost()->WasResized();
 
-			log_message("html resize - %dx%d\n", width, height);
+			if (browser)
+			{
+				browser->GetHost()->WasResized();
+				log_message("html resize - %dx%d\n", width, height);
+			}
 		}
 	}
 
@@ -353,7 +388,7 @@ public:
 	void tick(double t) override
 	{
 		auto const comp = composition();
-		if (comp && view_)
+		if (comp)
 		{
 			// The bounding box for this layer is in normalized coordinates,
 			// the html view needs to know pixel size...so we convert from normalized
@@ -365,7 +400,12 @@ public:
 			auto const rect = bounds();
 			auto const width = static_cast<int>(rect.width * comp->width());
 			auto const height = static_cast<int>(rect.height * comp->height());
-			view_->resize(width, height);		
+
+			if (view_)
+			{
+				view_->resize(width, height);
+				view_->tick(t);
+			}
 		}
 
 		Layer::tick(t);
@@ -513,11 +553,14 @@ shared_ptr<Layer> create_html_layer(
 {
 	CefWindowInfo window_info;
 	window_info.SetAsWindowless(nullptr);
-	window_info.shared_textures_enabled = true;
+	window_info.shared_texture_enabled = true;
+	window_info.external_begin_frame_enabled = true;
 
 	CefBrowserSettings settings;
 
-	// this value is meaningless when using shared textures
+	// if using SendExternalBeginFrame, we can leverage this value if we pass
+	// -1 for deadline and interval
+	// Note: this value is not capped by CEF when using SendExternalBeginFrame
 	settings.windowless_frame_rate = 120;
 
 	CefRefPtr<HtmlView> view(new HtmlView(device, width, height));
