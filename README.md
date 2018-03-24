@@ -49,6 +49,16 @@ Pressing `Ctrl+V` while the application is running can show the HTML view runnin
 
 Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. If the integrating application is doing its own v-sync ... then there shouldn't be any other component in the rendering pipeline that is also doing v-sync.  This demo application passes the command-line arg `disable-gpu-vsync` to Chromium.
 
+Multiple Views
+
+The application can load a url into multiples tiles arranged in a grid to test multiple HTML browser instances.  The following example uses `--grid` command-line switch to specify a 2 x 2 grid:
+
+```
+http://webglsamples.org/dynamic-cubemap/dynamic-cubemap.html --grid=2x2
+```
+
+![Grid][demo3]
+
 ## Integration
 The update to CEF proposes the following changes to the API for application integration.
 
@@ -85,8 +95,9 @@ A future update could include the following
  * Take the Chromium changes directly to the Chromium team
      * We can get the job done with the patching system built into CEF to apply Chromium changes, but rather the shared texture FBO probably makes more sense as a pull request on Chromium itself.  Seems only reasonable applications that use Headless-mode in Chromium could also benefit from shared textures.
 
-[demo1]: https://user-images.githubusercontent.com/2717038/36959722-2af057e8-2009-11e8-94a4-fd556f832001.png "Cefmixer Demo"
-[demo2]: https://user-images.githubusercontent.com/2717038/36979126-25625fcc-204c-11e8-841d-058d2f53ba91.png "No VSync"
+[demo1]: https://user-images.githubusercontent.com/2717038/37864646-def58a70-2f3f-11e8-9df9-551fe65ae766.png "Cefmixer Demo"
+[demo2]: https://user-images.githubusercontent.com/2717038/37864647-e5d5de80-2f3f-11e8-8050-bf2d00585e6f.png "No VSync"
+[demo3]: https://user-images.githubusercontent.com/2717038/37864648-ea76954c-2f3f-11e8-90d6-4130e56086f4.png "Grid"
 [x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3359.1754.g3312bc8_windows64.7z "x64 Distribution"
 [pr158]: https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff "Pull Request"
 [changes]: https://github.com/daktronics/cef-mixer/blob/master/CHANGES.md "Walkthrough"
