@@ -67,7 +67,7 @@ The update to CEF proposes the following changes to the API for application inte
 ```c
 CefWindowInfo info;
 info.SetAsWindowless(nullptr);
-info.shared_textures_enabled = true;
+info.shared_texture_enabled = true;
 ```
 
 2. Override the new `OnAcceleratedPaint` method in a `CefRenderHandler` derived class:
@@ -83,7 +83,7 @@ void OnAcceleratedPaint(
 }
 ```
 
-`OnAcceleratedPaint` will be invoked rather than the existing `OnPaint` when `shared_textures_enabled` is set to true and Chromium is able to create a shared D3D11 texture for the HTML view.
+`OnAcceleratedPaint` will be invoked rather than the existing `OnPaint` when `shared_texture_enabled` is set to true and Chromium is able to create a shared D3D11 texture for the HTML view.
 
 ## Room for Improvement
 A future update could include the following 
