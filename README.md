@@ -97,7 +97,7 @@ A future update could include the following
      * We can get the job done with the patching system built into CEF to apply Chromium changes, but rather the shared texture FBO probably makes more sense as a pull request on Chromium itself.  Seems only reasonable applications that use Headless-mode in Chromium could also benefit from shared textures.
 
 [demo1]: https://user-images.githubusercontent.com/2717038/37864646-def58a70-2f3f-11e8-9df9-551fe65ae766.png "Cefmixer Demo"
-[demo2]: https://user-images.githubusercontent.com/2717038/37864647-e5d5de80-2f3f-11e8-8050-bf2d00585e6f.png "No VSync"
+[demo2]: https://user-images.githubusercontent.com/2717038/37864824-a02a0648-2f41-11e8-9265-be60ad8bf8a0.png "No VSync"
 [demo3]: https://user-images.githubusercontent.com/2717038/37864648-ea76954c-2f3f-11e8-90d6-4130e56086f4.png "Grid"
 [x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3359.1754.g3312bc8_windows64.7z "x64 Distribution"
 [pr158]: https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff "Pull Request"
