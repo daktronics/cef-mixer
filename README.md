@@ -51,7 +51,7 @@ Obviously, there are not many use cases to render frames completely unthrottled 
 
 ### Multiple Views
 
-The application can load a url into multiples tiles arranged in a grid to test multiple HTML browser instances.  The following example uses `--grid` command-line switch to specify a 2 x 2 grid:
+The application can load a url into multiples layers arranged in a grid to test multiple HTML browser instances.  The following example uses the `--grid` command-line switch to specify a 2 x 2 grid:
 
 ```
 http://webglsamples.org/dynamic-cubemap/dynamic-cubemap.html --grid=2x2
