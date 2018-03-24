@@ -43,7 +43,7 @@ The url for the HTML layer can be specified as a command line argument: (width x
 ```
 cefmixer.exe https://threejs.org/examples/webgl_animation_keyframes_json.html --width=960 --height=540
 ```
-Pressing `Ctrl+V` while the application is running can show the HTML view running unthrottled with no v-sync:
+Pressing `Ctrl+V` will allow the HTML view to run unthrottled with no v-sync:
 
 ![VSync Off][demo2]
 
