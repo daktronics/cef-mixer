@@ -32,7 +32,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
 ## Usage
 Once the cefmixer.exe is built, it can be run without any arguments - in which case it will automatically navigate to https://webglsamples.org/aquarium/aquarium.html
 
-In addition to to rendering an HTML view off-screen, the demo application will also create an overlay layer using a PNG image file (the red DEMO graphic in the screenshots below).
+In addition to rendering an HTML view off-screen, the demo application will also create an overlay layer using a PNG image file (the red DEMO graphic in the screenshots below).
 
 The following screenshot was taken when running on a gaming monitor at 144Hz:
 
