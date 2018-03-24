@@ -521,7 +521,7 @@ void CefModule::message_loop()
 #else
 	// ~RenderProcessHostImpl() complains about DCHECK(is_self_deleted_)
 	// when we run single process mode ... I haven't figured out how to resolve yet
-	//settings.single_process = true;
+	settings.single_process = true;
 #endif
 
 	CefRefPtr<HtmlApp> app(new HtmlApp());
@@ -553,7 +553,17 @@ shared_ptr<Layer> create_html_layer(
 {
 	CefWindowInfo window_info;
 	window_info.SetAsWindowless(nullptr);
+
+	// we want to use OnAcceleratedPaint
 	window_info.shared_texture_enabled = true;
+
+	// set the sync key to 0 so Chromium will setup the shared
+	// texture with a keyed mutex and sync on key 0
+	// Note: we can set this value to uint64_t(-1) to not use keyed mutexes
+	window_info.shared_texture_sync_key = 0;
+	//window_info.shared_texture_sync_key = uint64_t(-1);
+	
+	// we are going to issue calls to SendExternalBeginFram
 	window_info.external_begin_frame_enabled = true;
 
 	CefBrowserSettings settings;
