@@ -8,7 +8,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
     * VS 2017 Community Edition is fine - just make sure to install C/C++ development tools
 
 2. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
-    * [x64 sample binary distribution][x64_build]
+    * [x64 sample binary distribution (Release build only)][x64_build]
     * ~~x86 sample binary distribution (Release build only)~~
     * The above sample distributions are not supported official builds - they are intended for testing/demo purposes.
     
