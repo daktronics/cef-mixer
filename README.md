@@ -63,7 +63,7 @@ cefmixer.exe http://webglsamples.org/dynamic-cubemap/dynamic-cubemap.html --grid
 
 The command-line examples above work to get something running quickly.  However, it is also possible to define the layers using a simple JSON file.
 
-For example, if the following json is saved to a file called `composition.json` :
+For example, if the following is saved to a file called `composition.json` :
 
 ```json
 {
