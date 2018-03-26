@@ -77,10 +77,10 @@ For example, if the following is saved to a file called `composition.json` :
      {
        "type":"web",
        "src":"file:///C:/examples/overlay.svg",
-	"left":0.5,
-	"top":0.5,
-	"width":0.5,
-	"height":0.5			
+       "left":0.5,
+       "top":0.5,
+       "width":0.5,
+       "height":0.5			
      }
   ]
 }
