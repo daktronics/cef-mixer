@@ -125,7 +125,10 @@ int to_int(CefRefPtr<CefDictionaryValue> const& dict, string const& key, int def
 		auto const type = dict->GetType(key);
 		if (type == VTYPE_INT) {
 			return dict->GetInt(key);
-		}		
+		}
+		if (type == VTYPE_DOUBLE) {
+			return static_cast<int>(dict->GetDouble(key));
+		}
 	}
 	return default_value;
 }
@@ -135,6 +138,9 @@ float to_float(CefRefPtr<CefDictionaryValue> const& dict, string const& key, flo
 	if (dict)
 	{
 		auto const type = dict->GetType(key);
+		if (type == VTYPE_INT) {
+			return static_cast<float>(dict->GetInt(key));
+		}
 		if (type == VTYPE_DOUBLE) {
 			return static_cast<float>(dict->GetDouble(key));
 		}
