@@ -96,6 +96,8 @@ cefmixer.exe c:\examples\composition.json
 
 ![JSON][demo4]
 
+The application uses the handy utility method `CefParseJSON` to parse JSON strings.
+
 ## Integration
 The update to CEF proposes the following changes to the API for application integration.
 
