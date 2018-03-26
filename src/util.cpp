@@ -108,19 +108,34 @@ int to_int(std::string s, int default_val)
 }
 
 
+bool file_exists(LPCWSTR filename)
+{
+	auto const attribs = GetFileAttributes(filename);
+	return (attribs != INVALID_FILE_ATTRIBUTES) &&
+		((attribs & FILE_ATTRIBUTE_DIRECTORY)==0);
+}
+
 //
 // simply resolve a filename to an absolute path using the application
 // directory as the base
 //
 std::shared_ptr<std::string> locate_media(std::string const& filespec)
 {
+	// if path is absolute ... we dont need to mess with the path
+	auto const utf16 = to_utf16(filespec.c_str());
+	if (!PathIsRelative(utf16.c_str())) {
+		return file_exists(utf16.c_str()) ? make_shared<string>(filespec) : nullptr;
+	}
+
 	WCHAR basedir[MAX_PATH + 1];
 	GetModuleFileName(nullptr, basedir, MAX_PATH);
 	PathRemoveFileSpec(basedir);
 
 	WCHAR filename[MAX_PATH + 1];
-	auto const utf16 = to_utf16(filespec.c_str());
 	PathCombine(filename, basedir, utf16.c_str());
 
-	return make_shared<string>(to_utf8(filename));
+	if (file_exists(filename)) {
+		return make_shared<string>(to_utf8(filename));
+	}
+	return nullptr;
 }

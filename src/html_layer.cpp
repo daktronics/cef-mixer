@@ -546,7 +546,7 @@ void CefModule::message_loop()
 //
 // use CEF to load and render a web page within a layer
 //
-shared_ptr<Layer> create_html_layer(
+shared_ptr<Layer> create_web_layer(
 	std::shared_ptr<d3d11::Device> const& device,
 	string const& url,
 	int width, int height)

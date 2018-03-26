@@ -6,6 +6,9 @@
 
 #include "resource.h"
 
+#include <fstream>
+#include <sstream>
+
 //
 // if we're running on a system with hybrid graphics ... 
 // try to force the selection of the high-performance gpu
@@ -126,20 +129,77 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	// this demo uses WIC to load images .. so we need COM
 	ComInitializer com_init;
 
-	std::string title("CEF OSR Mixer - ");
-	title.append(cef_version());
-
-	// create a window with our specific size
-	auto const window = create_window(instance, title, width, height);
-	if (!IsWindow(window)) {
+	// create a D3D11 rendering device
+	auto device = d3d11::create_device();
+	if (!device) {
 		assert(0);
 		cef_uninitialize();
 		return 0;
 	}
 
-	// create a D3D11 rendering device
-	auto device = d3d11::create_device();
-	if (!device) {
+	std::string json;
+
+	// if the url given on the command line is actually a local file ... 
+	// assume it is a .json file describing our layers
+	auto const json_file = locate_media(url);
+	if (json_file)
+	{
+		std::ifstream fin(*json_file);
+		if (fin.is_open()) {
+			json.assign((std::istreambuf_iterator<char>(fin)), std::istreambuf_iterator<char>());
+		}
+	}
+	
+	// if no JSON yet, then use command-line params to
+	// generate a default JSON layer description
+	if (json.empty())
+	{
+		std::stringstream builder;
+		builder << "{" << std::endl;
+		builder << "  \"width\":" << width << "," << std::endl;
+		builder << "  \"height\":" << height << "," << std::endl;
+		builder << "  \"layers\":[" << std::endl;
+
+		// create a grid of html layer(s) depending on our --grid option
+		// (easy way to test several active views)		
+		float cx = 1.0f / grid_x;
+		float cy = 1.0f / grid_y;
+		for (int x = 0; x < grid_x; ++x)
+		{
+			for (int y = 0; y < grid_y; ++y)
+			{
+				builder << "    {" << std::endl;
+				builder << "      \"type\":\"web\"," << std::endl;
+				builder << "      \"src\":\"" << url << "\"," << std::endl;
+				builder << "      \"left\":" << (x * cx) << "," << std::endl;
+				builder << "      \"top\":" << (y * cy) << "," << std::endl;
+				builder << "      \"width\":" << cx << "," << std::endl;
+				builder << "      \"height\":" << cy << "," << std::endl;
+				builder << "    }," << std::endl;
+			}
+		}
+
+		// add an image overlay layer
+		builder << "    { \"type\":\"image\", \"src\":\"overlay.png\" }" << std::endl;
+		builder << "  ]" << std::endl << "}";
+		json = builder.str();
+	}
+
+	// create a composition to represent our 2D-scene
+	auto composition = create_composition(device, json);
+	if (!composition) {
+		assert(0);
+		cef_uninitialize();
+		return 0;
+	}
+	
+	std::string title("CEF OSR Mixer - ");
+	title.append(cef_version());
+
+	// create a window with our specific size
+	auto const window = create_window(
+			instance, title, composition->width(), composition->height());
+	if (!IsWindow(window)) {
 		assert(0);
 		cef_uninitialize();
 		return 0;
@@ -153,110 +213,79 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		return 0;
 	}
 
+	// make the window visible now that we have D3D11 components ready
+	ShowWindow(window, SW_NORMAL);
+
+	auto fps_start = time_now();
+	uint32_t frame = 0;
+
+	// load keyboard accelerators
+	HACCEL accel_table = 
+		LoadAccelerators(instance, MAKEINTRESOURCE(IDR_APPLICATION));
+
+	auto ctx = device->immedidate_context();
+
+	auto const start_time = time_now();
+
+	// main message pump for our application
+	MSG msg = {};
+	while (msg.message != WM_QUIT)
 	{
-		// create a composition to represent our 2D-scene
-		auto const composition = std::make_shared<Composition>(device, width, height);
-
-		// create a grid of html layer(s) depending on our --grid option
-		// (easy way to test several active views)		
-		float cx = 1.0f / grid_x;
-		float cy = 1.0f / grid_y;
-		for (int x = 0; x < grid_x; ++x)
+		if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
 		{
-			for (int y = 0; y < grid_y; ++y)
+			if (!TranslateAccelerator(window, accel_table, &msg))
 			{
-				auto const html = create_html_layer(device, url, width, height);
-				if (html)
-				{
-					composition->add_layer(html);
-					html->move(x * cx, y * cy, cx, cy);
-				}
+				TranslateMessage(&msg);
+				DispatchMessage(&msg);
 			}
 		}
-
-		// create a image layer using a PNG in the application directory
-		auto const overlay = locate_media("overlay.png");
-		if (overlay)
+		else
 		{
-			auto const img = create_image_layer(device, *overlay);
-			if (img)
+			// update composition + layers based on time
+			auto const t = (time_now() - start_time) / 1000000.0;
+			composition->tick(t);
+
+			swapchain->bind(ctx);
+
+			// is there a request to resize ... if so, resize
+			// both the swapchain and the composition
+			if (resize_) 
 			{
-				composition->add_layer(img);
-				img->move(0.0f, 0.0f, 1.0f, 1.0f);
-			}
-		}
-
-		// make the window visible now that we have D3D11 components ready
-		ShowWindow(window, SW_NORMAL);
-
-		auto fps_start = time_now();
-		uint32_t frame = 0;
-
-		// load keyboard accelerators
-		HACCEL accel_table = 
-			LoadAccelerators(instance, MAKEINTRESOURCE(IDR_APPLICATION));
-
-		auto ctx = device->immedidate_context();
-
-		auto const start_time = time_now();
-
-		// main message pump for our application
-		MSG msg = {};
-		while (msg.message != WM_QUIT)
-		{
-			if (PeekMessage(&msg, nullptr, 0, 0, PM_REMOVE))
-			{
-				if (!TranslateAccelerator(window, accel_table, &msg))
+				RECT rc;
+				GetClientRect(window, &rc);
+				width = rc.right - rc.left;
+				height = rc.bottom - rc.top;
+				if (width && height)
 				{
-					TranslateMessage(&msg);
-					DispatchMessage(&msg);
+					resize_ = false;
+					composition->resize(width, height);
+					swapchain->resize(width, height);
 				}
 			}
-			else
+
+			// clear the render-target
+			swapchain->clear(0.0f, 0.0f, 1.0f, 1.0f);
+
+			// render our scene
+			composition->render(ctx);
+
+			// present to window
+			swapchain->present(sync_interval_);
+
+			frame++;
+			auto const now = time_now();
+			if ((now - fps_start) > 1000000)
 			{
-				// update composition + layers based on time
-				auto const t = (time_now() - start_time) / 1000000.0;
-				composition->tick(t);
-
-				swapchain->bind(ctx);
-
-				// is there a request to resize ... if so, resize
-				// both the swapchain and the composition
-				if (resize_) 
-				{
-					RECT rc;
-					GetClientRect(window, &rc);
-					width = rc.right - rc.left;
-					height = rc.bottom - rc.top;
-					if (width && height)
-					{
-						resize_ = false;
-						composition->resize(width, height);
-						swapchain->resize(width, height);
-					}
-				}
-
-				// clear the render-target
-				swapchain->clear(0.0f, 0.0f, 1.0f, 1.0f);
-
-				// render our scene
-				composition->render(ctx);
-
-				// present to window
-				swapchain->present(sync_interval_);
-
-				frame++;
-				auto const now = time_now();
-				if ((now - fps_start) > 1000000)
-				{
-					auto const fps = frame / double((now - fps_start) / 1000000.0);
-					log_message("compositor: fps: %3.2f\n", fps);
-					frame = 0;
-					fps_start = time_now();
-				}
+				auto const fps = frame / double((now - fps_start) / 1000000.0);
+				log_message("compositor: fps: %3.2f\n", fps);
+				frame = 0;
+				fps_start = time_now();
 			}
 		}
 	}
+
+	// force layers to be destroyed
+	composition.reset();
 
 	cef_uninitialize();
 	return 0;

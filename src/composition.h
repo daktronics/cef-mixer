@@ -88,13 +88,18 @@ int cef_initialize(HINSTANCE);
 void cef_uninitialize();
 std::string cef_version();
 
+// create a composition from a JSON string
+std::shared_ptr<Composition> create_composition(
+	std::shared_ptr<d3d11::Device> const& device,
+	std::string const& json);
+
 // create a layer to show a image
 std::shared_ptr<Layer> create_image_layer(
 			std::shared_ptr<d3d11::Device> const& device,
 			std::string const& file_name);
 
-// create a layer to show an HTML web page (using CEF)
-std::shared_ptr<Layer> create_html_layer(
+// create a layer to show a web page (using CEF)
+std::shared_ptr<Layer> create_web_layer(
 			std::shared_ptr<d3d11::Device> const& device,
 			std::string const& url,
 			int width,
