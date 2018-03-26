@@ -43,4 +43,10 @@ add_custom_command(
         COMMAND ${CMAKE_COMMAND} -E copy
                 ${CMAKE_SOURCE_DIR}/resource/overlay.png
                 ${TARGET_OUTPUT_DIRECTORY}/overlay.png)
+				
+add_custom_command(
+        TARGET cefmixer POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E copy
+                ${CMAKE_SOURCE_DIR}/resource/overlay.svg
+                ${TARGET_OUTPUT_DIRECTORY}/overlay.svg)
   
