@@ -86,7 +86,7 @@ For example, if the following is saved to a file called `composition.json` :
 }
 ```
 
-> Note: layer position and size are in normalized 0..1 units where 0,0 is the top-left corner and 1,1 is the bottom left corner.
+> Note: layer position and size are in normalized 0..1 units where 0,0 is the top-left corner and 1,1 is the bottom-right corner.
 
 We can run `cefmixer` using the above JSON layer description:
 
