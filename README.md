@@ -54,10 +54,47 @@ Obviously, there are not many use cases to render frames completely unthrottled 
 The application can tile a url into layers arranged in a grid to test multiple HTML browser instances.  Each layer is an independent CEF Browser instance.  The following example uses the `--grid` command-line switch to specify a 2 x 2 grid:
 
 ```
-http://webglsamples.org/dynamic-cubemap/dynamic-cubemap.html --grid=2x2
+cefmixer.exe http://webglsamples.org/dynamic-cubemap/dynamic-cubemap.html --grid=2x2
 ```
 
 ![Grid][demo3]
+
+### Custom Layering
+
+The command-line examples above work to get something running quickly.  However, it is also possible to define the layers using a simple JSON file.
+
+For example, if the following json is saved to a file called `composition.json` :
+
+```json
+{
+  "width":960,
+  "height":540,
+  "layers": [
+     {
+       "type":"web",
+       "src":"http://webglsamples.org/spacerocks/spacerocks.html"
+     },
+     {
+       "type":"web",
+       "src":"file:///C:/examples/overlay.svg",
+	"left":0.5,
+	"top":0.5,
+	"width":0.5,
+	"height":0.5			
+     }
+  ]
+}
+```
+
+> Note: layer position and size are in normalized 0..1 units
+
+We can run `cefmixer` using the above JSON layer description:
+
+```
+cefmixer.exe c:\examples\composition.json
+```
+
+![JSON][demo4]
 
 ## Integration
 The update to CEF proposes the following changes to the API for application integration.
@@ -99,6 +136,7 @@ A future update could include the following
 [demo1]: https://user-images.githubusercontent.com/2717038/37864646-def58a70-2f3f-11e8-9df9-551fe65ae766.png "Cefmixer Demo"
 [demo2]: https://user-images.githubusercontent.com/2717038/37864824-a02a0648-2f41-11e8-9265-be60ad8bf8a0.png "No VSync"
 [demo3]: https://user-images.githubusercontent.com/2717038/37864648-ea76954c-2f3f-11e8-90d6-4130e56086f4.png "Grid"
+[demo4]: https://user-images.githubusercontent.com/2717038/37930171-9850afe0-3107-11e8-9a24-21e1b1996fa5.png "JSON"
 [x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3359.1754.g3312bc8_windows64.7z "x64 Distribution"
 [pr158]: https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff "Pull Request"
 [changes]: https://github.com/daktronics/cef-mixer/blob/master/CHANGES.md "Walkthrough"
