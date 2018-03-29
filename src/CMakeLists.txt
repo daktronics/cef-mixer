@@ -37,16 +37,13 @@ target_link_libraries (cefmixer d3d11.lib Shlwapi.lib libcef_lib libcef_dll_wrap
 COPY_FILES(cefmixer "${CEF_BINARY_FILES}" "${CEF_BINARY_DIR}" "${TARGET_OUTPUT_DIRECTORY}")
 COPY_FILES(cefmixer "${CEF_RESOURCE_FILES}" "${CEF_RESOURCE_DIR}" "${TARGET_OUTPUT_DIRECTORY}")
 
-# copy our test overlay image to the output directory
-add_custom_command(
-        TARGET cefmixer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_SOURCE_DIR}/resource/overlay.png
-                ${TARGET_OUTPUT_DIRECTORY}/overlay.png)
-				
-add_custom_command(
-        TARGET cefmixer POST_BUILD
-        COMMAND ${CMAKE_COMMAND} -E copy
-                ${CMAKE_SOURCE_DIR}/resource/overlay.svg
-                ${TARGET_OUTPUT_DIRECTORY}/overlay.svg)
+# copy our test resources to output directory
+set(mixer_resources overlay.png overlay.svg hud.html)
+foreach(_resfile ${mixer_resources})
+	add_custom_command(
+			TARGET cefmixer POST_BUILD
+			COMMAND ${CMAKE_COMMAND} -E copy
+					${CMAKE_SOURCE_DIR}/resource/${_resfile}
+					${TARGET_OUTPUT_DIRECTORY}/resource/${_resfile})
+endforeach()
   
