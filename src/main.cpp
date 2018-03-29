@@ -180,7 +180,23 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		}
 
 		// add an image overlay layer
-		builder << "    { \"type\":\"image\", \"src\":\"overlay.png\" }" << std::endl;
+		builder << "    { \"type\":\"image\", \"src\":\"resource/overlay.png\" }," << std::endl;
+
+		// add a HUD layer to show stats
+		auto const hud_file = locate_media("resource/hud.html");
+		if (hud_file) {
+			// (we need to convert to file:/// url for CEF
+			auto const hud_url = to_file_url(*hud_file);
+			if (!hud_url.empty()) 
+			{
+				builder << "    { \"type\":\"web\"," << std::endl
+					     << "      \"src\":\"" << hud_url << "\"," << std::endl
+					     << "      \"top\":0.95," << std::endl
+					     << "      \"height\":0.05" << std::endl
+					     << "    }" << std::endl;
+			}
+		}
+
 		builder << "  ]" << std::endl << "}";
 		json = builder.str();
 	}
@@ -215,9 +231,6 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 
 	// make the window visible now that we have D3D11 components ready
 	ShowWindow(window, SW_NORMAL);
-
-	auto fps_start = time_now();
-	uint32_t frame = 0;
 
 	// load keyboard accelerators
 	HACCEL accel_table = 
@@ -258,7 +271,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				if (width && height)
 				{
 					resize_ = false;
-					composition->resize(width, height);
+					composition->resize(sync_interval_ != 0, width, height);
 					swapchain->resize(width, height);
 				}
 			}
@@ -271,16 +284,6 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 
 			// present to window
 			swapchain->present(sync_interval_);
-
-			frame++;
-			auto const now = time_now();
-			if ((now - fps_start) > 1000000)
-			{
-				auto const fps = frame / double((now - fps_start) / 1000000.0);
-				log_message("compositor: fps: %3.2f\n", fps);
-				frame = 0;
-				fps_start = time_now();
-			}
 		}
 	}
 
@@ -349,6 +352,7 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 		case WM_COMMAND:
 			if (LOWORD(wparam) == ID_WINDOW_VSYNC) {
 				sync_interval_ = sync_interval_ ? 0 : 1;
+				resize_ = true;
 			}
 			break;
 

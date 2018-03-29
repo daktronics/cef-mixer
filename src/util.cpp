@@ -96,6 +96,20 @@ wstring to_utf16(const char* utf8)
 	return wstring(utf16.get(), cch);
 }
 
+string to_file_url(string const& filename)
+{
+	string url;
+	auto const utf16(to_utf16(filename));
+	DWORD cch = 4096;
+	wchar_t* buff = new wchar_t[cch];
+	auto const hr = UrlCreateFromPath(utf16.c_str(), buff, &cch, 0);
+	if (SUCCEEDED(hr)) {
+		url = to_utf8(buff);
+	}
+	delete[] buff;
+	return url;
+}
+
 int to_int(std::string s, int default_val)
 {
 	int n;

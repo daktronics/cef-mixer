@@ -14,19 +14,135 @@
 #include <functional>
 #include <map>
 
-
 #include "util.h"
 
 using namespace std;
 
-class HtmlApp : public CefApp, public CefBrowserProcessHandler 
+//
+// helper function to convert a 
+// CefDictionaryValue to a CefV8Object
+//
+CefRefPtr<CefV8Value> to_v8object(CefRefPtr<CefDictionaryValue> const& dictionary)
+{
+	auto const obj = CefV8Value::CreateObject(nullptr, nullptr);
+	if (dictionary) 
+	{
+		auto const attrib = V8_PROPERTY_ATTRIBUTE_READONLY;
+		CefDictionaryValue::KeyList keys;
+		dictionary->GetKeys(keys);
+		for (auto const& k : keys)
+		{
+			auto const type = dictionary->GetType(k);
+			switch (type)
+			{
+				case VTYPE_BOOL: obj->SetValue(k,
+					CefV8Value::CreateBool(dictionary->GetBool(k)), attrib);
+					break;
+				case VTYPE_INT: obj->SetValue(k,
+					CefV8Value::CreateInt(dictionary->GetInt(k)), attrib);
+					break;
+				case VTYPE_DOUBLE: obj->SetValue(k, 
+					CefV8Value::CreateDouble(dictionary->GetDouble(k)), attrib);
+					break;
+				case VTYPE_STRING: obj->SetValue(k,
+					CefV8Value::CreateString(dictionary->GetString(k)), attrib);
+					break;
+
+				default: break;
+			}
+		}
+	}
+	return obj;
+}
+
+//
+// V8 handler for our 'mixer' object available to javascript
+// running in a page within this application
+//
+class MixerHandler : 
+			public CefV8Accessor
+{
+public:
+	MixerHandler(
+		CefRefPtr<CefBrowser> const& browser,
+		CefRefPtr<CefV8Context> const& context)
+		: browser_(browser)
+		, context_(context)
+	{
+		auto window = context->GetGlobal();
+		auto const obj = CefV8Value::CreateObject(this, nullptr);
+		obj->SetValue("requestStats", V8_ACCESS_CONTROL_DEFAULT, V8_PROPERTY_ATTRIBUTE_NONE);
+		window->SetValue("mixer", obj, V8_PROPERTY_ATTRIBUTE_NONE);
+	}
+
+	void update(CefRefPtr<CefDictionaryValue> const& dictionary)
+	{
+		if (!request_stats_) {
+			return;
+		}
+
+		context_->Enter();
+		CefV8ValueList values;
+		values.push_back(to_v8object(dictionary));
+		request_stats_->ExecuteFunction(request_stats_, values);
+		context_->Exit();
+	}
+
+	bool Get(const CefString& name,
+		const CefRefPtr<CefV8Value> object,
+		CefRefPtr<CefV8Value>& retval,
+		CefString& /*exception*/) override {
+
+		if (name == "requestStats" && request_stats_ != nullptr) {
+			retval = request_stats_;
+			return true;
+		}
+
+		// Value does not exist.
+		return false;
+	}
+
+	bool Set(const CefString& name,
+		const CefRefPtr<CefV8Value> object,
+		const CefRefPtr<CefV8Value> value,
+		CefString& /*exception*/) override
+	{
+		if (name == "requestStats") {
+			request_stats_ = value;
+
+			// notify the browser process that we want stats
+			auto message = CefProcessMessage::Create("mixer-request-stats");
+			if (message != nullptr && browser_ != nullptr) {
+				browser_->SendProcessMessage(PID_BROWSER, message);
+			}
+			return true;
+		}
+		return false;
+	}
+
+	IMPLEMENT_REFCOUNTING(MixerHandler);
+
+private:
+
+	CefRefPtr<CefBrowser> const browser_;
+	CefRefPtr<CefV8Context> const context_;
+	CefRefPtr<CefV8Value> request_stats_;
+};
+
+
+class HtmlApp : public CefApp, 
+					public CefBrowserProcessHandler,
+	            public CefRenderProcessHandler
 {
 public:
 	HtmlApp() {
 	}
 
-	virtual CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override
-	{
+	CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override {
+		return this;
+	}
+
+	CefRefPtr<CefRenderProcessHandler> GetRenderProcessHandler() override {
 		return this;
 	}
 
@@ -34,20 +150,72 @@ public:
 		CefString const& /*process_type*/,
 		CefRefPtr<CefCommandLine> command_line) override
 	{
-		// this application uses the method SendExternalBeginFrame
-		// so currently the following flag is required to get Chromium
-		// to utilize the ExternalBeginFrame .. this should be temporary
+		// disable creation of a GPUCache/ folder on disk
+		command_line->AppendSwitch("disable-gpu-shader-disk-cache");
+		
+		// un-comment to show the built-in Chromium fps meter
+		//command_line->AppendSwitch("show-fps-counter");		
 
-		command_line->AppendSwitch("disable-gpu-vsync");
+		//command_line->AppendSwitch("disable-gpu-vsync");
 	}
 
-	virtual void OnContextInitialized() override
+	virtual void OnContextInitialized() override {
+	}
+
+	//
+	// CefRenderProcessHandler::OnContextCreated
+	//
+	// Adds our custom 'mixer' object to the javascript context running
+	// in the render process
+	//
+	void OnContextCreated(
+		CefRefPtr<CefBrowser> browser,
+		CefRefPtr<CefFrame> frame,
+		CefRefPtr<CefV8Context> context) override
 	{
+		mixer_handler_ = new MixerHandler(browser, context);
+	}
+
+	//
+	// CefRenderProcessHandler::OnBrowserDestroyed
+	//
+	void OnBrowserDestroyed(CefRefPtr<CefBrowser> browser) override
+	{
+		mixer_handler_ = nullptr;
+	}
+
+	//
+	// CefRenderProcessHandler::OnProcessMessageReceived
+	//
+	bool OnProcessMessageReceived(CefRefPtr<CefBrowser> browser,
+		CefProcessId /*source_process*/,
+		CefRefPtr<CefProcessMessage> message) 
+	{
+		auto const name = message->GetName().ToString();
+		if (name == "mixer-update-stats")
+		{
+			if (mixer_handler_ != nullptr)
+			{
+				// we expect just 1 param that is a dictionary of stat values
+				auto const args = message->GetArgumentList();
+				auto const size = args->GetSize();
+				if (size > 0) {
+					auto const dict = args->GetDictionary(0);
+					if (dict && dict->GetSize() > 0) {
+						mixer_handler_->update(dict);
+					}
+				}
+			}
+			return true;
+		}
+		return false;
 	}
 
 private:
 
 	IMPLEMENT_REFCOUNTING(HtmlApp);
+
+	CefRefPtr<MixerHandler> mixer_handler_;
 };
 
 
@@ -105,6 +273,9 @@ public:
 					auto const width = shared_buffer_->width();
 					auto const height = shared_buffer_->height();
 					auto const format = shared_buffer_->format();
+
+					log_message("creating texture buffers - %dx%d\n", width, height);
+
 					back_buffer_ = device_->create_texture(width, height, format, nullptr, 0);
 					front_buffer_ = device_->create_texture(width, height, format, nullptr, 0);
 				}
@@ -183,6 +354,7 @@ public:
 		: width_(width)
 		, height_(height)
 		, frame_buffer_(make_shared<FrameBuffer>(device))
+		, needs_stats_update_(false)
 	{
 		frame_ = 0;
 		fps_start_ = 0ull;
@@ -220,6 +392,22 @@ public:
 		return this; 
 	}
 
+	bool OnProcessMessageReceived(
+		CefRefPtr<CefBrowser> /*browser*/,
+		CefProcessId /*source_process*/,
+		CefRefPtr<CefProcessMessage> message) override
+	{
+		auto name = message->GetName().ToString();
+		if (name == "mixer-request-stats")
+		{
+			// just flag that we need to deliver stats updates
+			// to the render process via a message
+			needs_stats_update_ = true;
+			return true;
+		}
+		return false;
+	}
+
 	void OnPaint(
 		CefRefPtr<CefBrowser> /*browser*/,
 		PaintElementType type,
@@ -253,7 +441,7 @@ public:
 		{
 			auto const fps = frame_ / double((now - fps_start_) / 1000000.0);
 
-			log_message("html: OnPaint fps: %3.2f\n", fps);
+			log_message("html: OnAcceleratedPaint fps: %3.2f\n", fps);
 			
 			frame_ = 0;
 			fps_start_ = time_now();
@@ -310,7 +498,7 @@ public:
 		return frame_buffer_->swap(ctx);
 	}
 
-	void tick(double t)
+	void tick(shared_ptr<Composition> const& composition, double t)
 	{
 		decltype(browser_) browser;
 		{
@@ -318,18 +506,49 @@ public:
 			browser = browser_;
 		}
 
+		// the javascript might be interested in our 
+		// rendering statistics (e.g. HUD) ...
+		if (needs_stats_update_) {
+			update_stats(browser, composition);
+		}
+
 		if (browser) {
 		
 			// all times for SendExternalBeginFrame are in microseconds
 			// these params should correspond with viz::BeginFrameArgs in Chromium
 	
-			int64_t time_us = 0;     // 0 = just use default Chromium timestamp
-			int64_t deadline_us = 0; // 0 = don't care yet; just go fast
-			int64_t interval_us = 0; // 0 = don't care yet about interval; just go fast
+			int64_t time_us = 0;      // 0 = just use default Chromium timestamp
+			int64_t deadline_us = -1; // -1 = use default based on windowless_frame_rate
+			int64_t interval_us = -1; // -1 = use default based on windowless_frame_rate
 
 			browser->GetHost()->SendExternalBeginFrame(
-					time_us, deadline_us, interval_us);
+				time_us, deadline_us, interval_us);
 		}
+	}
+
+	void update_stats(CefRefPtr<CefBrowser> const& browser, 
+			shared_ptr<Composition> const& composition)
+	{
+		if (!browser || !composition) {
+			return;
+		}
+
+		auto message = CefProcessMessage::Create("mixer-update-stats");
+		auto args = message->GetArgumentList();
+		
+		// create a dictionary to hold all of individual statistic values
+		// it will get converted by the Render process into a V8 Object
+		// that gets passed to the script running in the page
+		auto dict = CefDictionaryValue::Create();
+		dict->SetInt("width", composition->width());
+		dict->SetInt("height", composition->height());
+		dict->SetDouble("fps", composition->fps());
+		dict->SetDouble("time", composition->time());
+		dict->SetBool("vsync", composition->is_vsync());
+
+		args->SetDictionary(0, dict);
+
+		browser->SendProcessMessage(PID_RENDERER, message);
 	}
 
 	void resize(int width, int height)
@@ -354,6 +573,8 @@ public:
 		}
 	}
 
+
+
 private:
 	IMPLEMENT_REFCOUNTING(HtmlView);
 
@@ -364,6 +585,7 @@ private:
 	shared_ptr<FrameBuffer> frame_buffer_;
 	mutex lock_;
 	CefRefPtr<CefBrowser> browser_;
+	bool needs_stats_update_;
 };
 
 
@@ -404,7 +626,7 @@ public:
 			if (view_)
 			{
 				view_->resize(width, height);
-				view_->tick(t);
+				view_->tick(comp, t);
 			}
 		}
 
@@ -559,19 +781,24 @@ shared_ptr<Layer> create_web_layer(
 
 	// set the sync key to 0 so Chromium will setup the shared
 	// texture with a keyed mutex and sync on key 0
-	// Note: we can set this value to uint64_t(-1) to not use keyed mutexes
+	// Note: we can set this value to uint64_t(-1) to not use a keyed mutex
 	window_info.shared_texture_sync_key = 0;
 	//window_info.shared_texture_sync_key = uint64_t(-1);
 	
-	// we are going to issue calls to SendExternalBeginFram
+	// we are going to issue calls to SendExternalBeginFrame
+	// and CEF will not use its internal BeginFrameTimer in this case
 	window_info.external_begin_frame_enabled = true;
 
 	CefBrowserSettings settings;
 
+	// Set the maximum rate that the HTML content will render at
+	//
 	// if using SendExternalBeginFrame, we can leverage this value if we pass
 	// -1 for deadline and interval
-	// Note: this value is not capped by CEF when using SendExternalBeginFrame
-	settings.windowless_frame_rate = 120;
+	//
+	// Note: this value is NOT capped to 60 by CEF when using shared textures
+	//
+	settings.windowless_frame_rate = 240;
 
 	CefRefPtr<HtmlView> view(new HtmlView(device, width, height));
 
@@ -592,11 +819,14 @@ int cef_initialize(HINSTANCE instance)
 {
 	CefEnableHighDPISupport();
 
-	CefMainArgs main_args(instance);
+	{ // check first if we need to run as a worker process
 
-	int exit_code = CefExecuteProcess(main_args, nullptr, nullptr);
-	if (exit_code >= 0) {
-		return exit_code;
+		CefRefPtr<HtmlApp> app(new HtmlApp());
+		CefMainArgs main_args(instance);
+		int exit_code = CefExecuteProcess(main_args, app, nullptr);
+		if (exit_code >= 0) {
+			return exit_code;
+		}
 	}
 
 	//MessageBox(0, L"Attach Debugger", L"CEF OSR", MB_OK);

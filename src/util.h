@@ -13,6 +13,8 @@ std::string to_utf8(std::wstring const&);
 std::wstring to_utf16(const char*);
 std::wstring to_utf16(std::string const&);
 
+std::string to_file_url(std::string const&);
+
 int to_int(std::string, int default_val);
 
 std::shared_ptr<std::string> locate_media(std::string const&);

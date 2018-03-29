@@ -69,16 +69,26 @@ public:
 	int width() const { return width_; }
 	int height() const { return height_; }
 
+	double fps() const;
+	double time() const;
+
+	bool is_vsync() const;
+
 	void tick(double);
 	void render(std::shared_ptr<d3d11::Context> const&);
 	
 	void add_layer(std::shared_ptr<Layer> const& layer);
-	void resize(int width, int height);
+	void resize(bool vsync, int width, int height);
 
 private:
 
 	int width_;
 	int height_;
+	uint32_t frame_;
+	int64_t fps_start_;
+	double fps_;
+	double time_;
+	bool vsync_;
 
 	std::shared_ptr<d3d11::Device> const device_;
 	std::vector<std::shared_ptr<Layer>> layers_;

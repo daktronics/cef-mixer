@@ -82,8 +82,28 @@ Composition::Composition(shared_ptr<d3d11::Device> const& device,
 	int width, int height)
 	: width_(width)
 	, height_(height)
+	, vsync_(true)
 	, device_(device)
 {
+	fps_ = 0.0;
+	time_ = 0.0;
+	frame_ = 0;
+	fps_start_ = time_now();
+}
+
+bool Composition::is_vsync() const
+{
+	return vsync_;
+}
+
+double Composition::time() const
+{
+	return time_;
+}
+
+double Composition::fps() const
+{
+	return fps_;
 }
 
 void Composition::add_layer(shared_ptr<Layer> const& layer)
@@ -96,14 +116,16 @@ void Composition::add_layer(shared_ptr<Layer> const& layer)
 	}
 }
 
-void Composition::resize(int width, int height)
+void Composition::resize(bool vsync, int width, int height)
 {
+	vsync_ = vsync;
 	width_ = width;
 	height_ = height;
 }
 
 void Composition::tick(double t)
 {
+	time_ = t;
 	for (auto const& layer : layers_) {
 		layer->tick(t);
 	}
@@ -115,6 +137,16 @@ void Composition::render(shared_ptr<d3d11::Context> const& ctx)
 	// our layers in order (not doing any depth or 3D here)
 	for (auto const& layer : layers_) {
 		layer->render(ctx);
+	}
+
+	frame_++;
+	auto const now = time_now();
+	if ((now - fps_start_) > 1000000)
+	{
+		fps_ = frame_ / double((now - fps_start_) / 1000000.0);
+		//log_message("composition: fps: %3.2f\n", fps_);
+		frame_ = 0;
+		fps_start_ = time_now();
 	}
 }
 
