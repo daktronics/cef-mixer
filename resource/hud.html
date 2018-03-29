@@ -67,8 +67,8 @@
 			var vsync = document.getElementById('vsync');
 			
 					
-			if (mixer) {
-				mixer.requestStats = function(stats){
+			if (window.mixer) {
+				window.mixer.requestStats = function(stats){
 					size.innerText = stats.width + 'x' + stats.height;	
 					fps.innerText = format_double(stats.fps, 2);			
 					clock.innerText = format_timecode(stats.time);
