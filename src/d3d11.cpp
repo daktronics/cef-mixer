@@ -215,6 +215,12 @@ namespace d3d11 {
 			res->GetSharedHandle(&share_handle_);
 			res->Release();
 		}
+
+		// are we using a keyed mutex?
+		IDXGIKeyedMutex* mutex = nullptr;
+		if (SUCCEEDED(texture_->QueryInterface(__uuidof(IDXGIKeyedMutex), (void**)&mutex))) {
+			keyed_mutex_ = to_com_ptr(mutex);
+		}
 	}
 
 	uint32_t Texture2D::width() const
@@ -238,13 +244,15 @@ namespace d3d11 {
 		return desc.Format;
 	}
 
-	bool Texture2D::lock_key(uint64_t key)
+	bool Texture2D::has_mutex() const
 	{
-		IDXGIKeyedMutex* mutex = nullptr;
-		if (SUCCEEDED(texture_->QueryInterface(__uuidof(IDXGIKeyedMutex), (void**)&mutex)))
-		{
-			auto const hr = mutex->AcquireSync(key, INFINITE);
-			mutex->Release();
+		return (keyed_mutex_.get() != nullptr);
+	}
+
+	bool Texture2D::lock_key(uint64_t key, uint32_t timeout_ms)
+	{
+		if (keyed_mutex_) {
+			auto const hr = keyed_mutex_->AcquireSync(key, timeout_ms);
 			return SUCCEEDED(hr);
 		}
 		return true;
@@ -252,11 +260,8 @@ namespace d3d11 {
 
 	void Texture2D::unlock_key(uint64_t key)
 	{
-		IDXGIKeyedMutex* mutex = nullptr;
-		if (SUCCEEDED(texture_->QueryInterface(__uuidof(IDXGIKeyedMutex), (void**)&mutex)))
-		{
-			mutex->ReleaseSync(key);
-			mutex->Release();		
+		if (keyed_mutex_) {
+			keyed_mutex_->ReleaseSync(key);
 		}
 	}
 
@@ -517,6 +522,23 @@ namespace d3d11 {
 		auto hr = device_->OpenSharedResource(
 				handle, __uuidof(ID3D11Texture2D), (void**)(&tex));
 		if (FAILED(hr)) {
+			return nullptr;
+		}
+
+		D3D11_TEXTURE2D_DESC td;
+		tex->GetDesc(&td);
+
+		D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
+		srv_desc.Format = td.Format;
+		srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+		srv_desc.Texture2D.MostDetailedMip = 0;
+		srv_desc.Texture2D.MipLevels = 1;
+
+		ID3D11ShaderResourceView* srv = nullptr;
+		hr = device_->CreateShaderResourceView(tex, &srv_desc, &srv);
+		if (FAILED(hr))
+		{
+			tex->Release();
 			return nullptr;
 		}
 

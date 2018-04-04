@@ -134,7 +134,9 @@ namespace d3d11 {
 		uint32_t height() const;
 		DXGI_FORMAT format() const;
 
-		bool lock_key(uint64_t key);
+		bool has_mutex() const;
+
+		bool lock_key(uint64_t key, uint32_t timeout_ms);
 		void unlock_key(uint64_t key);
 
 		void* share_handle() const;
@@ -147,6 +149,7 @@ namespace d3d11 {
 		
 		std::shared_ptr<ID3D11Texture2D> const texture_;
 		std::shared_ptr<ID3D11ShaderResourceView> const srv_;
+		std::shared_ptr<IDXGIKeyedMutex> keyed_mutex_;
 		std::shared_ptr<Context> ctx_;
 	};
 

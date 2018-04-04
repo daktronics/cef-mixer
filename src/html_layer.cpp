@@ -301,6 +301,7 @@ public:
 
 		{
 			lock_guard<mutex> guard(lock_);
+
 			front = front_buffer_;
 			if (swap_count_)
 			{
@@ -315,12 +316,14 @@ public:
 		// issue copy when necessary
 		if (back && shared)
 		{
-			if (shared->lock_key(sync_key_))
+			if (shared->lock_key(sync_key_, 100))
 			{
 				d3d11::ScopedBinder<d3d11::Texture2D> texture_binder(ctx, back);
 				back->copy_from(shared);
-
 				shared->unlock_key(sync_key_);
+			}
+			else {
+				log_message("could not lock texture\n");
 			}
 		}
 
@@ -350,11 +353,13 @@ class HtmlView : public CefClient,
 	public CefLifeSpanHandler
 {
 public:
-	HtmlView(std::shared_ptr<d3d11::Device> const& device, int width, int height)
+	HtmlView(std::shared_ptr<d3d11::Device> const& device,
+		int width, int height, bool send_begin_Frame)
 		: width_(width)
 		, height_(height)
 		, frame_buffer_(make_shared<FrameBuffer>(device))
 		, needs_stats_update_(false)
+		, send_begin_frame_(send_begin_Frame)
 	{
 		frame_ = 0;
 		fps_start_ = 0ull;
@@ -512,7 +517,7 @@ public:
 			update_stats(browser, composition);
 		}
 
-		if (browser) {
+		if (send_begin_frame_ && browser) {
 		
 			// all times for SendExternalBeginFrame are in microseconds
 			// these params should correspond with viz::BeginFrameArgs in Chromium
@@ -586,6 +591,7 @@ private:
 	mutex lock_;
 	CefRefPtr<CefBrowser> browser_;
 	bool needs_stats_update_;
+	bool send_begin_frame_;
 };
 
 
@@ -782,8 +788,8 @@ shared_ptr<Layer> create_web_layer(
 	// set the sync key to 0 so Chromium will setup the shared
 	// texture with a keyed mutex and sync on key 0
 	// Note: we can set this value to uint64_t(-1) to not use a keyed mutex
-	window_info.shared_texture_sync_key = 0;
-	//window_info.shared_texture_sync_key = uint64_t(-1);
+	//window_info.shared_texture_sync_key = 0;
+	window_info.shared_texture_sync_key = uint64_t(-1);
 	
 	// we are going to issue calls to SendExternalBeginFrame
 	// and CEF will not use its internal BeginFrameTimer in this case
@@ -800,7 +806,8 @@ shared_ptr<Layer> create_web_layer(
 	//
 	settings.windowless_frame_rate = 240;
 
-	CefRefPtr<HtmlView> view(new HtmlView(device, width, height));
+	CefRefPtr<HtmlView> view(new HtmlView(
+			device, width, height, window_info.external_begin_frame_enabled));
 
 	CefBrowserHost::CreateBrowser(
 			window_info,
