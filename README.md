@@ -124,6 +124,24 @@ void OnAcceleratedPaint(
 
 `OnAcceleratedPaint` will be invoked rather than the existing `OnPaint` when `shared_texture_enabled` is set to true and Chromium is able to create a shared D3D11 texture for the HTML view.
 
+3. Optionally enable the ability to issue BeginFrame requests
+
+```c
+CefWindowInfo info;
+info.SetAsWindowless(nullptr);
+info.shared_texture_enabled = true;
+info.external_begin_frame_enabled = true;
+```
+
+At an interval suitable for your application, make the following call (see html_layer.cpp for a full example) :
+
+```c
+browser->GetHost()->SendExternalBeginFrame();
+```
+
+When using `SendExternalBeginFrame`, the default timing in CEF is disabled and the `windowless_frame_rate` setting is ignored.
+
+
 ## Room for Improvement
 A future update could include the following 
  * ~~Allow the client application to perform SendBeginFrame by adding a new method to CEF's public interface.~~
