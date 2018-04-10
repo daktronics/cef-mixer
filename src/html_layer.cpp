@@ -777,9 +777,10 @@ shared_ptr<Layer> create_web_layer(
 	// we want to use OnAcceleratedPaint
 	window_info.shared_texture_enabled = true;
 
-	// We can set the shared_texture_sync_key to 0 
-	// so Chromium will not setup the shared texture with a keyed mutex.  
+	// We can set the shared_texture_sync_key to 0 so Chromium will 
+	// setup the shared texture with a keyed mutex.  
 	// The Keyed Mutex is a work-in-progress and it is disabled by default
+	// (currently this application is NOT using keyed mutexes)
 	//window_info.shared_texture_sync_key = 0;
 
 	// we are going to issue calls to SendExternalBeginFrame
