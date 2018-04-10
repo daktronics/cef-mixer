@@ -47,7 +47,7 @@ Pressing `Ctrl+V` will allow the HTML view to run unthrottled with no v-sync:
 
 ![VSync Off][demo2]
 
-Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. If the integrating application is doing its own v-sync ... then there shouldn't be any other component in the rendering pipeline that is also doing v-sync.  This demo application passes the command-line arg `disable-gpu-vsync` to Chromium.
+Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. This demo application uses the new `SendExternalBeginFrame` method to issue BeginFrame requests to Chromium to synchronize HTML updates with its render loop.
 
 ### Multiple Views
 
