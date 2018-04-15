@@ -772,6 +772,7 @@ float4 main(VS_OUTPUT input) : SV_Target
 			D3D_FEATURE_LEVEL_11_0,
 			D3D_FEATURE_LEVEL_10_1,
 			D3D_FEATURE_LEVEL_10_0,
+			//D3D_FEATURE_LEVEL_9_3,
 		};
 		UINT num_feature_levels = sizeof(feature_levels) / sizeof(feature_levels[0]);
 
@@ -795,7 +796,7 @@ float4 main(VS_OUTPUT input) : SV_Target
 		{
 			// DirectX 11.0 platforms will not recognize D3D_FEATURE_LEVEL_11_1 
 			// so we need to retry without it
-			D3D11CreateDevice(
+			hr = D3D11CreateDevice(
 				nullptr,
 				D3D_DRIVER_TYPE_HARDWARE,
 				nullptr,
@@ -808,7 +809,10 @@ float4 main(VS_OUTPUT input) : SV_Target
 				&pctx);
 		}
 		
-		if (SUCCEEDED(hr)) {
+		if (SUCCEEDED(hr)) 
+		{
+			log_message("d3d11: selected feature level: 0x%04X\n", selected_level);
+
 			return make_shared<Device>(pdev, pctx);
 		}
 
