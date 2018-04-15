@@ -517,17 +517,9 @@ public:
 			update_stats(browser, composition);
 		}
 
-		if (send_begin_frame_ && browser) {
-		
-			// all times for SendExternalBeginFrame are in microseconds
-			// these params should correspond with viz::BeginFrameArgs in Chromium
-	
-			int64_t time_us = 0;      // 0 = just use default Chromium timestamp
-			int64_t deadline_us = -1; // -1 = use default based on windowless_frame_rate
-			int64_t interval_us = -1; // -1 = use default based on windowless_frame_rate
-
-			browser->GetHost()->SendExternalBeginFrame(
-				time_us, deadline_us, interval_us);
+		// optionally issue a BeginFrame request
+		if (send_begin_frame_ && browser) {		
+			browser->GetHost()->SendExternalBeginFrame();
 		}
 	}
 
@@ -785,12 +777,12 @@ shared_ptr<Layer> create_web_layer(
 	// we want to use OnAcceleratedPaint
 	window_info.shared_texture_enabled = true;
 
-	// set the sync key to 0 so Chromium will setup the shared
-	// texture with a keyed mutex and sync on key 0
-	// Note: we can set this value to uint64_t(-1) to not use a keyed mutex
+	// We can set the shared_texture_sync_key to 0 so Chromium will 
+	// setup the shared texture with a keyed mutex.  
+	// The Keyed Mutex is a work-in-progress and it is disabled by default
+	// (currently this application is NOT using keyed mutexes)
 	//window_info.shared_texture_sync_key = 0;
-	window_info.shared_texture_sync_key = uint64_t(-1);
-	
+
 	// we are going to issue calls to SendExternalBeginFrame
 	// and CEF will not use its internal BeginFrameTimer in this case
 	window_info.external_begin_frame_enabled = true;
@@ -799,12 +791,13 @@ shared_ptr<Layer> create_web_layer(
 
 	// Set the maximum rate that the HTML content will render at
 	//
-	// if using SendExternalBeginFrame, we can leverage this value if we pass
-	// -1 for deadline and interval
+	// NOTE: this value is NOT capped to 60 by CEF when using shared textures and
+	// it is completely ignored when using SendExternalBeginFrame
 	//
-	// Note: this value is NOT capped to 60 by CEF when using shared textures
+	// For testing, this application uses 120Hz to show that the 60Hz limit is ignored
+	// (set window_info.external_begin_frame_enabled above to false to test)
 	//
-	settings.windowless_frame_rate = 240;
+	settings.windowless_frame_rate = 120;
 
 	CefRefPtr<HtmlView> view(new HtmlView(
 			device, width, height, window_info.external_begin_frame_enabled));

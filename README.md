@@ -47,7 +47,7 @@ Pressing `Ctrl+V` will allow the HTML view to run unthrottled with no v-sync:
 
 ![VSync Off][demo2]
 
-Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. If the integrating application is doing its own v-sync ... then there shouldn't be any other component in the rendering pipeline that is also doing v-sync.  This demo application passes the command-line arg `disable-gpu-vsync` to Chromium.
+Obviously, there are not many use cases to render frames completely unthrottled - but the point is to let the integrating application control all timing aspects. This demo application uses the new `SendExternalBeginFrame` method to issue BeginFrame requests to Chromium to synchronize HTML updates with its render loop.
 
 ### Multiple Views
 
@@ -124,6 +124,24 @@ void OnAcceleratedPaint(
 
 `OnAcceleratedPaint` will be invoked rather than the existing `OnPaint` when `shared_texture_enabled` is set to true and Chromium is able to create a shared D3D11 texture for the HTML view.
 
+3. Optionally enable the ability to issue BeginFrame requests
+
+```c
+CefWindowInfo info;
+info.SetAsWindowless(nullptr);
+info.shared_texture_enabled = true;
+info.external_begin_frame_enabled = true;
+```
+
+At an interval suitable for your application, make the following call (see [html_layer.cpp](https://github.com/daktronics/cef-mixer/blob/master/src/html_layer.cpp) for a full example) :
+
+```c
+browser->GetHost()->SendExternalBeginFrame();
+```
+
+When using `SendExternalBeginFrame`, the default timing in CEF is disabled and the `windowless_frame_rate` setting is ignored.
+
+
 ## Room for Improvement
 A future update could include the following 
  * ~~Allow the client application to perform SendBeginFrame by adding a new method to CEF's public interface.~~
@@ -139,7 +157,7 @@ A future update could include the following
 [demo2]: https://user-images.githubusercontent.com/2717038/37864824-a02a0648-2f41-11e8-9265-be60ad8bf8a0.png "No VSync"
 [demo3]: https://user-images.githubusercontent.com/2717038/37864648-ea76954c-2f3f-11e8-90d6-4130e56086f4.png "Grid"
 [demo4]: https://user-images.githubusercontent.com/2717038/37930171-9850afe0-3107-11e8-9a24-21e1b1996fa5.png "JSON"
-[x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3359.1751.gcb25470_windows64.7z "x64 Distribution"
+[x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3359.1759.g5f8ab1c_windows64_minimal.7z "x64 Distribution"
 [pr158]: https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff "Pull Request"
 [changes]: https://github.com/daktronics/cef-mixer/blob/master/CHANGES.md "Walkthrough"
 
