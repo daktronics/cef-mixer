@@ -157,6 +157,14 @@ public:
 		//command_line->AppendSwitch("show-fps-counter");		
 
 		//command_line->AppendSwitch("disable-gpu-vsync");
+
+		// Most systems would not need to use this switch - but on older
+		// hardware, Chromium may still choose to disable D3D11 for 
+		// gpu workarounds.  Accelerated OSR will not at all with 
+		// D3D11 disabled, so we force it on.  
+		// See the discussion on this issue:
+		// https://github.com/daktronics/cef-mixer/issues/10
+		command_line->AppendSwitchWithValue("use-angle", "d3d11");
 	}
 
 	virtual void OnContextInitialized() override {
