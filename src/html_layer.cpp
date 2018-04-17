@@ -166,6 +166,10 @@ public:
 		// https://github.com/daktronics/cef-mixer/issues/10
 		//
 		command_line->AppendSwitchWithValue("use-angle", "d3d11");
+
+		// tell Chromium to autoplay <video> elements without 
+		// requiring the muted attribute or user interaction
+		command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
 	}
 
 	virtual void OnContextInitialized() override {
