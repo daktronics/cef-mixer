@@ -52,6 +52,10 @@ namespace d3d11 {
 	public:
 		Device(ID3D11Device*, ID3D11DeviceContext*);
 
+		operator ID3D11Device*() {
+			return device_.get();
+		}
+
 		std::shared_ptr<Context> immedidate_context();
 
 		std::shared_ptr<SwapChain> create_swapchain(HWND, int width=0, int height=0);

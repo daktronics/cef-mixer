@@ -106,25 +106,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	}
 	if (height <= 0) {
 		height = 720;
-	}
-	
-	//
-	// default the grid param to 1 .. 1x1 (single layer)
-	//
-	// if grid=2x2 then a 2x2 grid of html views will be added
-	//
-	// +-------+-------+
-	// |       |       |
-	// +-------+-------+
-	// |       |       |
-	// +-------+-------+
-	//	
-	if (grid_x <= 0) {
-		grid_x = 1;
-	}
-	if (grid_y <= 0) {
-		grid_y = 1;
-	}
+	}	
 
 	// this demo uses WIC to load images .. so we need COM
 	ComInitializer com_init;
@@ -160,22 +142,35 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		builder << "  \"height\":" << height << "," << std::endl;
 		builder << "  \"layers\":[" << std::endl;
 
-		// create a grid of html layer(s) depending on our --grid option
-		// (easy way to test several active views)		
-		float cx = 1.0f / grid_x;
-		float cy = 1.0f / grid_y;
-		for (int x = 0; x < grid_x; ++x)
+		if (grid_x > 0 && grid_y > 0)
 		{
-			for (int y = 0; y < grid_y; ++y)
+			//
+			// if grid=2x2 then a 2x2 grid of html views will be added
+			//
+			// +-------+-------+
+			// |       |       |
+			// +-------+-------+
+			// |       |       |
+			// +-------+-------+
+			//
+
+			// create a grid of html layer(s) depending on our --grid option
+			// (easy way to test several active views)		
+			float cx = 1.0f / grid_x;
+			float cy = 1.0f / grid_y;
+			for (int x = 0; x < grid_x; ++x)
 			{
-				builder << "    {" << std::endl;
-				builder << "      \"type\":\"web\"," << std::endl;
-				builder << "      \"src\":\"" << url << "\"," << std::endl;
-				builder << "      \"left\":" << (x * cx) << "," << std::endl;
-				builder << "      \"top\":" << (y * cy) << "," << std::endl;
-				builder << "      \"width\":" << cx << "," << std::endl;
-				builder << "      \"height\":" << cy << "," << std::endl;
-				builder << "    }," << std::endl;
+				for (int y = 0; y < grid_y; ++y)
+				{
+					builder << "    {" << std::endl;
+					builder << "      \"type\":\"web\"," << std::endl;
+					builder << "      \"src\":\"" << url << "\"," << std::endl;
+					builder << "      \"left\":" << (x * cx) << "," << std::endl;
+					builder << "      \"top\":" << (y * cy) << "," << std::endl;
+					builder << "      \"width\":" << cx << "," << std::endl;
+					builder << "      \"height\":" << cy << "," << std::endl;
+					builder << "    }," << std::endl;
+				}
 			}
 		}
 
