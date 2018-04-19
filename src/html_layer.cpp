@@ -749,13 +749,11 @@ void CefModule::message_loop()
 	settings.multi_threaded_message_loop = false;
 	settings.windowless_rendering_enabled = true;
 
-#if defined(NDEBUG)
-	settings.single_process = false;
-#else
+/*#if !defined(NDEBUG)
 	// ~RenderProcessHostImpl() complains about DCHECK(is_self_deleted_)
 	// when we run single process mode ... I haven't figured out how to resolve yet
 	settings.single_process = true;
-#endif
+#endif*/
 
 	CefRefPtr<HtmlApp> app(new HtmlApp());
 
