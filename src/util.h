@@ -19,6 +19,8 @@ int to_int(std::string, int default_val);
 
 std::shared_ptr<std::string> locate_media(std::string const&);
 
+std::string get_temp_filename(std::string const&);
+
 // 
 // simple method to wrap a raw COM pointer in a shared_ptr
 // for auto Release()

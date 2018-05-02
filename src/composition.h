@@ -113,4 +113,5 @@ std::shared_ptr<Layer> create_web_layer(
 			std::shared_ptr<d3d11::Device> const& device,
 			std::string const& url,
 			int width,
-			int height);
+			int height,
+			bool view_source);

@@ -130,6 +130,30 @@ bool file_exists(LPCWSTR filename)
 }
 
 //
+// creates a full path to a file under <USER>\AppData\Local\cefmixer
+//
+string get_temp_filename(std::string const& filename)
+{
+	PWSTR wpath = nullptr;
+	if (SUCCEEDED(
+		SHGetKnownFolderPath(FOLDERID_LocalAppData, 0, 0, &wpath)))
+	{
+		wstring utf16_path(wpath);
+		CoTaskMemFree(wpath);
+
+		utf16_path.append(L"\\");
+		utf16_path.append(L"cefmixer");
+		CreateDirectory(utf16_path.c_str(), 0);
+		utf16_path.append(L"\\");
+		utf16_path.append(to_utf16(filename));
+		return to_utf8(utf16_path);
+	}
+
+	assert(0);
+	return "";
+}
+
+//
 // simply resolve a filename to an absolute path using the application
 // directory as the base
 //

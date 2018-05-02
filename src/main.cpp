@@ -54,6 +54,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	int grid_x = 1;
 	int grid_y = 1;
 
+	bool view_source = false;
+
 	// read options from the command-line
 	int args;
 	LPWSTR* arg_list = CommandLineToArgvW(GetCommandLineW(), &args);
@@ -69,29 +71,38 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 			else
 			{
 				option = option.substr(2);
-				auto const eq = option.find('=');
-				if (eq != std::string::npos) 
-				{
-					auto const key = option.substr(0, eq);
-					auto const value = option.substr(eq+1);
-					if (key == "width") {
-						width = to_int(value, 0);
-					}
-					else if (key == "height") {
-						height = to_int(value, 0);
-					}
-					else if (key == "grid") {
 
-						// split on x (eg. 2x3)
-						auto const c = value.find('x');
-						if (c != std::string::npos) {
-							grid_x = to_int(value.substr(0, c), 0);
-							grid_y = to_int(value.substr(c + 1), 0);
-						}
-						else {
-							grid_x = grid_y = to_int(value, 0);
-						}
+				std::string key, value;
+				auto const eq = option.find('=');
+				if (eq != std::string::npos)
+				{
+					key = option.substr(0, eq);
+					value = option.substr(eq + 1);
+				}
+				else {
+					key = option;
+				}
+
+				if (key == "width") {
+					width = to_int(value, 0);
+				}
+				else if (key == "height") {
+					height = to_int(value, 0);
+				}
+				else if (key == "grid") {
+
+					// split on x (eg. 2x3)
+					auto const c = value.find('x');
+					if (c != std::string::npos) {
+						grid_x = to_int(value.substr(0, c), 0);
+						grid_y = to_int(value.substr(c + 1), 0);
 					}
+					else {
+						grid_x = grid_y = to_int(value, 0);
+					}
+				}
+				else if (key == "view-source") {
+					view_source = true;
 				}
 			}
 		}
@@ -169,6 +180,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 					builder << "      \"top\":" << (y * cy) << "," << std::endl;
 					builder << "      \"width\":" << cx << "," << std::endl;
 					builder << "      \"height\":" << cy << "," << std::endl;
+					builder << "      \"view_source\":" << (view_source ? "true" : "false");					
 					builder << "    }," << std::endl;
 				}
 			}
@@ -187,7 +199,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				builder << "    { \"type\":\"web\"," << std::endl
 					     << "      \"src\":\"" << hud_url << "\"," << std::endl
 					     << "      \"top\":0.95," << std::endl
-					     << "      \"height\":0.05" << std::endl
+					     << "      \"height\":0.05," << std::endl
+					     << "      \"view_source\":" << (view_source ? "true" : "false")
 					     << "    }" << std::endl;
 			}
 		}

@@ -13,6 +13,9 @@
 #include <iomanip>
 #include <functional>
 #include <map>
+#include <vector>
+#include <fstream>
+#include <algorithm>
 
 #include "util.h"
 
@@ -294,16 +297,44 @@ private:
 	std::shared_ptr<d3d11::Device> const device_;
 };
 
+//
+// Simple string visitor that will dump the contents
+// to a file
+//
+class HtmlSourceWriter : public CefStringVisitor
+{
+public:
+	HtmlSourceWriter(string const& filename) {
+		fout_ = make_shared<ofstream>(filename);
+	}
+
+	void Visit(const CefString& string) override
+	{
+		if (fout_ && fout_->is_open())
+		{
+			auto const utf8 = string.ToString();
+			fout_->write(utf8.c_str(), utf8.size());
+		}
+	}
+
+private:
+	IMPLEMENT_REFCOUNTING(HtmlSourceWriter);
+	shared_ptr<ofstream> fout_;
+};
 
 
 class HtmlView : public CefClient,
 	public CefRenderHandler,
-	public CefLifeSpanHandler
+	public CefLifeSpanHandler,
+	public CefLoadHandler
 {
 public:
-	HtmlView(std::shared_ptr<d3d11::Device> const& device,
-		int width, int height, bool send_begin_Frame)
-		: width_(width)
+	HtmlView(
+			string const& name,
+			shared_ptr<d3d11::Device> const& device,
+			int width, int height, bool send_begin_Frame)
+		: name_(name)
+		, width_(width)
 		, height_(height)
 		, frame_buffer_(make_shared<FrameBuffer>(device))
 		, needs_stats_update_(false)
@@ -343,6 +374,10 @@ public:
 
 	CefRefPtr<CefLifeSpanHandler> GetLifeSpanHandler() override { 
 		return this; 
+	}
+
+	CefRefPtr<CefLoadHandler> GetLoadHandler() override {
+		return this;
 	}
 
 	bool OnProcessMessageReceived(
@@ -446,6 +481,13 @@ public:
 		return false;
 	}
 
+	void OnLoadEnd(CefRefPtr<CefBrowser> browser, 
+		CefRefPtr<CefFrame> frame,
+		int /*httpStatusCode*/)
+	{
+		dump_source(frame);
+	}
+
 	shared_ptr<d3d11::Texture2D> texture(shared_ptr<d3d11::Context> const& ctx)
 	{
 		return frame_buffer_->swap(ctx);
@@ -518,11 +560,20 @@ public:
 		}
 	}
 
-
+	void dump_source(CefRefPtr<CefFrame> frame)
+	{
+		if (frame.get() && !name_.empty())
+		{
+			auto const filename = get_temp_filename(name_);
+			CefRefPtr<CefStringVisitor> writer(new HtmlSourceWriter(filename));
+			frame->GetSource(writer);
+		}
+	}
 
 private:
 	IMPLEMENT_REFCOUNTING(HtmlView);
 
+	string name_;
 	int width_;
 	int height_;
 	uint32_t frame_;
@@ -715,7 +766,7 @@ void CefModule::message_loop()
 shared_ptr<Layer> create_web_layer(
 	std::shared_ptr<d3d11::Device> const& device,
 	string const& url,
-	int width, int height)
+	int width, int height, bool view_source)
 {
 	CefWindowInfo window_info;
 	window_info.SetAsWindowless(nullptr);
@@ -745,8 +796,25 @@ shared_ptr<Layer> create_web_layer(
 	//
 	settings.windowless_frame_rate = 120;
 
+	string name;
+
+	// generate a name for the view based on the url - with the view
+	// source option, we'll dump the page DOM source to a temporaty file
+	//
+	// under <USER>\AppData\LocalData\cefmixer
+	//
+	if (view_source)
+	{
+		name = url;
+		std::transform(name.begin(), name.end(), name.begin(), ::tolower);
+		string remove("<>:\"/\\|?*");
+		for (auto const& c : remove) {
+			name.erase(std::remove(name.begin(), name.end(), c), name.end());
+		}
+	}
+
 	CefRefPtr<HtmlView> view(new HtmlView(
-			device, width, height, window_info.external_begin_frame_enabled));
+			name, device, width, height, window_info.external_begin_frame_enabled));
 
 	CefBrowserHost::CreateBrowser(
 			window_info,

@@ -208,8 +208,10 @@ shared_ptr<Layer> to_layer(
 			return create_image_layer(device, *realpath);
 		}
 	}
-	else if (type == "web") {
-		return create_web_layer(device, src, width, height);
+	else if (type == "web") 
+	{
+		return create_web_layer(
+			device, src, width, height, dict->GetBool("view_source"));
 	}
 
 	return nullptr;
