@@ -237,125 +237,56 @@ class FrameBuffer
 public:
 	FrameBuffer(std::shared_ptr<d3d11::Device> const& device)
 		: device_(device)
-		, abort_(false)
-		, swap_count_(0)
-		, sync_key_(0)
-	{
+		, abort_(false)	{
 	}
 
-	void abort()
-	{
+	void abort() {
 		abort_ = true;
-		swapped_.notify_one();
 	}
 
 	//
 	// called in response to Cef's OnAcceleratedPaint notification
 	//
-	void on_paint(void* shared_handle, uint64_t sync_key)
+	void on_paint(void* shared_handle, uint64_t /*sync_key*/)
 	{
-		{
-			unique_lock<mutex> lock(lock_);
-			swapped_.wait(lock, [&]() {
-				return (abort_ || (swap_count_.load() == 0));
-			});
-		}
+		// Note: we're not handling keyed mutexes yet
 
 		if (!abort_)
 		{
 			lock_guard<mutex> guard(lock_);
-			
+
 			// did the shared texture change?
 			if (shared_buffer_)
 			{
-				if (shared_handle != shared_buffer_->share_handle()) 
-				{
+				if (shared_handle != shared_buffer_->share_handle()) {
 					shared_buffer_.reset();
-					back_buffer_.reset();
-					front_buffer_.reset();
 				}
 			}
 
-			// open the shared texture and create our back + 
-			// front buffers (front and back textures are not shared)
-			if (!shared_buffer_) 
-			{
-				shared_buffer_ = device_->open_shared_texture((void*)shared_handle);
-				if (shared_buffer_)
-				{
-					auto const width = shared_buffer_->width();
-					auto const height = shared_buffer_->height();
-					auto const format = shared_buffer_->format();
-
-					log_message("creating texture buffers - %dx%d\n", width, height);
-
-					back_buffer_ = device_->create_texture(width, height, format, nullptr, 0);
-					front_buffer_ = device_->create_texture(width, height, format, nullptr, 0);
-				}
+			// open the shared texture
+			if (!shared_buffer_) {
+				shared_buffer_ = device_->open_shared_texture((void*)shared_handle);				
 			}
 		}
-
-		sync_key_ = sync_key;
-		swap_count_ = 1;
 	}
 
 	//
-	// if there is a pending update from Cef, this method will
-	// process it and signal that Cef can continue.
+	// this method simply returns what should be considered the front buffer
+	// we're simply using the shared texture directly 
 	//
-	// this method will return the texture that should be considered 
-	// the current frame (front)
+	// ... this method could be expanded on to handle synchronization through a keyed mutex
 	// 
 	shared_ptr<d3d11::Texture2D> swap(shared_ptr<d3d11::Context> const& ctx)
 	{
-		decltype(front_buffer_) front;
-		decltype(back_buffer_) back;
-		decltype(shared_buffer_) shared;
-
-		{
-			lock_guard<mutex> guard(lock_);
-
-			front = front_buffer_;
-			if (swap_count_)
-			{
-				auto tmp = front_buffer_;
-				back_buffer_ = tmp;
-				front_buffer_ = front = back_buffer_;
-				shared = shared_buffer_;
-				back = back_buffer_;
-			}
-		}
-		
-		// issue copy when necessary
-		if (back && shared)
-		{
-			if (shared->lock_key(sync_key_, 100))
-			{
-				d3d11::ScopedBinder<d3d11::Texture2D> texture_binder(ctx, back);
-				back->copy_from(shared);
-				shared->unlock_key(sync_key_);
-			}
-			else {
-				log_message("could not lock texture\n");
-			}
-		}
-
-		swap_count_ = 0;
-		swapped_.notify_one();
-
-		return front;
+		lock_guard<mutex> guard(lock_);
+		return shared_buffer_;
 	}
 
 private:
 
 	mutex lock_;
 	atomic_bool abort_;
-	atomic_int32_t swap_count_;
-	condition_variable swapped_;
-	uint64_t sync_key_;
 	shared_ptr<d3d11::Texture2D> shared_buffer_;
-	shared_ptr<d3d11::Texture2D> back_buffer_;
-	shared_ptr<d3d11::Texture2D> front_buffer_;
 	std::shared_ptr<d3d11::Device> const device_;
 };
 

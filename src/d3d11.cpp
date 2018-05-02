@@ -528,21 +528,25 @@ namespace d3d11 {
 		D3D11_TEXTURE2D_DESC td;
 		tex->GetDesc(&td);
 
-		D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
-		srv_desc.Format = td.Format;
-		srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
-		srv_desc.Texture2D.MostDetailedMip = 0;
-		srv_desc.Texture2D.MipLevels = 1;
-
 		ID3D11ShaderResourceView* srv = nullptr;
-		hr = device_->CreateShaderResourceView(tex, &srv_desc, &srv);
-		if (FAILED(hr))
-		{
-			tex->Release();
-			return nullptr;
-		}
 
-		return make_shared<Texture2D>(tex, nullptr);
+		if (td.BindFlags & D3D11_BIND_SHADER_RESOURCE)
+		{
+			D3D11_SHADER_RESOURCE_VIEW_DESC srv_desc;
+			srv_desc.Format = td.Format;
+			srv_desc.ViewDimension = D3D11_SRV_DIMENSION_TEXTURE2D;
+			srv_desc.Texture2D.MostDetailedMip = 0;
+			srv_desc.Texture2D.MipLevels = 1;
+
+			hr = device_->CreateShaderResourceView(tex, &srv_desc, &srv);
+			if (FAILED(hr))
+			{
+				tex->Release();
+				return nullptr;
+			}
+		}
+		
+		return make_shared<Texture2D>(tex, srv);
 	}
 
 	shared_ptr<Texture2D> Device::create_texture(
