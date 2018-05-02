@@ -207,6 +207,10 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	std::string title("CEF OSR Mixer - ");
 	title.append(cef_version());
 
+	title.append(" - [gpu: ");
+	title.append(device->adapter_name());
+	title.append("]");
+
 	// create a window with our specific size
 	auto const window = create_window(
 			instance, title, composition->width(), composition->height());

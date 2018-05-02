@@ -302,6 +302,29 @@ namespace d3d11 {
 		_lib_compiler = LoadLibrary(L"d3dcompiler_47.dll");
 	}
 
+	string Device::adapter_name() const
+	{
+		IDXGIDevice* dxgi_dev = nullptr;
+		auto hr = device_->QueryInterface(__uuidof(dxgi_dev), (void**)&dxgi_dev);
+		if (SUCCEEDED(hr))
+		{
+			IDXGIAdapter* dxgi_adapt = nullptr;
+			hr = dxgi_dev->GetAdapter(&dxgi_adapt);
+			dxgi_dev->Release();
+			if (SUCCEEDED(hr))
+			{
+				DXGI_ADAPTER_DESC desc;
+				hr = dxgi_adapt->GetDesc(&desc);
+				dxgi_adapt->Release();
+				if (SUCCEEDED(hr)) {
+					return to_utf8(desc.Description);
+				}
+			}
+		}
+
+		return "n/a";
+	}
+
 	shared_ptr<Context> Device::immedidate_context()
 	{
 		return ctx_;
@@ -815,9 +838,13 @@ float4 main(VS_OUTPUT input) : SV_Target
 		
 		if (SUCCEEDED(hr)) 
 		{
+			auto const dev = make_shared<Device>(pdev, pctx);
+
+			log_message("d3d11: selected adapter: %s\n", dev->adapter_name().c_str());
+
 			log_message("d3d11: selected feature level: 0x%04X\n", selected_level);
 
-			return make_shared<Device>(pdev, pctx);
+			return dev;
 		}
 
 		return nullptr;

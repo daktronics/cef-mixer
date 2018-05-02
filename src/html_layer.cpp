@@ -264,8 +264,12 @@ public:
 			}
 
 			// open the shared texture
-			if (!shared_buffer_) {
+			if (!shared_buffer_) 
+			{
 				shared_buffer_ = device_->open_shared_texture((void*)shared_handle);				
+				if (!shared_buffer_) {
+					log_message("could not open shared texture!");
+				}
 			}
 		}
 	}

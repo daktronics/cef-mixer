@@ -52,6 +52,8 @@ namespace d3d11 {
 	public:
 		Device(ID3D11Device*, ID3D11DeviceContext*);
 
+		std::string adapter_name() const;
+
 		operator ID3D11Device*() {
 			return device_.get();
 		}
