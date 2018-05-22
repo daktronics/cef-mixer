@@ -8,7 +8,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
     * VS 2017 Community Edition is fine - just make sure to install C/C++ development tools
 
 2. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
-    * The following builds support **Chromium 68**
+    * Sample distributions support **Chromium 68**
     * [x64 sample binary distribution][x64_build] (Release build only)
     * [x86 sample binary distribution][x86_build] (Release build only)
     
