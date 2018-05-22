@@ -11,7 +11,8 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
     * The following builds support **Chromium 68**
     * [x64 sample binary distribution][x64_build] (Release build only)
     * [x86 sample binary distribution][x86_build] (Release build only)
-    * The above sample distributions are not supported official builds - they are intended for testing/demo purposes.
+    
+> Note: The above sample distributions are not supported official builds - they are intended for testing/demo purposes.
     
 3. From a command prompt set the environment variable **CEF_ROOT** to the location of your CEF binary distribution.  Then run the gen_vs2017.bat script.
 
