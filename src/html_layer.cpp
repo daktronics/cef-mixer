@@ -173,6 +173,9 @@ public:
 		// tell Chromium to autoplay <video> elements without 
 		// requiring the muted attribute or user interaction
 		command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
+
+		command_line->AppendSwitchWithValue("use-cmd-decoder", "validating");
+
 	}
 
 	virtual void OnContextInitialized() override {
@@ -735,11 +738,11 @@ void CefModule::message_loop()
 	settings.multi_threaded_message_loop = false;
 	settings.windowless_rendering_enabled = true;
 
-/*#if !defined(NDEBUG)
+#if !defined(NDEBUG)
 	// ~RenderProcessHostImpl() complains about DCHECK(is_self_deleted_)
 	// when we run single process mode ... I haven't figured out how to resolve yet
-	settings.single_process = true;
-#endif*/
+	//settings.single_process = true;
+#endif
 
 	CefRefPtr<HtmlApp> app(new HtmlApp());
 
