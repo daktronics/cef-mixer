@@ -174,7 +174,7 @@ public:
 		// requiring the muted attribute or user interaction
 		command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
 
-		command_line->AppendSwitchWithValue("use-cmd-decoder", "validating");
+		//command_line->AppendSwitchWithValue("use-cmd-decoder", "validating");
 
 	}
 
@@ -512,7 +512,7 @@ public:
 
 		// optionally issue a BeginFrame request
 		if (send_begin_frame_ && browser) {		
-			browser->GetHost()->SendExternalBeginFrame();
+			browser->GetHost()->SendExternalBeginFrame(0, 0, 0);
 		}
 	}
 
@@ -741,7 +741,7 @@ void CefModule::message_loop()
 #if !defined(NDEBUG)
 	// ~RenderProcessHostImpl() complains about DCHECK(is_self_deleted_)
 	// when we run single process mode ... I haven't figured out how to resolve yet
-	//settings.single_process = true;
+	settings.single_process = true;
 #endif
 
 	CefRefPtr<HtmlApp> app(new HtmlApp());
