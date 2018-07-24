@@ -2,6 +2,7 @@
 
 #include "d3d11.h"
 #include <vector>
+#include <mutex>
 
 // basic rect for floats
 struct Rect
@@ -14,6 +15,14 @@ struct Rect
 
 class Composition;
 
+enum class MouseButton
+{
+	Left,
+	Middle,
+	Right
+};
+
+
 //
 // a simple abstraction for a 2D layer within a composition
 // 
@@ -22,7 +31,7 @@ class Composition;
 class Layer
 {
 public:
-	Layer(std::shared_ptr<d3d11::Device> const& device, bool flip);
+	Layer(std::shared_ptr<d3d11::Device> const& device, bool want_input, bool flip);
 	~Layer();
 
 	virtual void attach(std::shared_ptr<Composition> const&);
@@ -31,10 +40,13 @@ public:
 	
 	virtual void tick(double);
 	virtual void render(std::shared_ptr<d3d11::Context> const&) = 0;
+	virtual void mouse_click(MouseButton button, bool up, int32_t x, int32_t y);
 
 	Rect bounds() const;
 	
 	std::shared_ptr<Composition> composition() const;
+
+	bool want_input() const;
 
 protected:
 
@@ -44,17 +56,15 @@ protected:
 
 	bool flip_;
 	Rect bounds_;
+	bool want_input_;
 
 	std::shared_ptr<d3d11::Geometry> geometry_;
 	std::shared_ptr<d3d11::Effect> effect_;
 	std::shared_ptr<d3d11::Device> const device_;
 
-private:
-	
+private:	
 	std::weak_ptr<Composition> composition_;
-
 };
-
 
 //
 // A collection of layers. 
@@ -80,6 +90,8 @@ public:
 	void add_layer(std::shared_ptr<Layer> const& layer);
 	void resize(bool vsync, int width, int height);
 
+	void mouse_click(MouseButton button, bool up, int32_t x, int32_t y);
+
 private:
 
 	int width_;
@@ -89,9 +101,9 @@ private:
 	double fps_;
 	double time_;
 	bool vsync_;
-
 	std::shared_ptr<d3d11::Device> const device_;
 	std::vector<std::shared_ptr<Layer>> layers_;
+	std::mutex lock_;
 };
 
 int cef_initialize(HINSTANCE);
@@ -114,4 +126,5 @@ std::shared_ptr<Layer> create_web_layer(
 			std::string const& url,
 			int width,
 			int height,
+			bool want_input,
 			bool view_source);

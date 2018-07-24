@@ -11,7 +11,7 @@ public:
 	ImageLayer(
 			std::shared_ptr<d3d11::Device> const& device,
 			std::shared_ptr<d3d11::Texture2D> const& texture)
-		: Layer(device, false)
+		: Layer(device, false, false)
 		, texture_(texture)
 	{
 	}

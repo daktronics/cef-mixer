@@ -65,6 +65,7 @@ class WebView;
 //
 shared_ptr<Layer> create_web_layer(
 	std::shared_ptr<d3d11::Device> const& device,
+	bool want_input,
 	CefRefPtr<WebView> const& view);
 
 //
@@ -290,10 +291,11 @@ public:
 	}
 
 	//
-	// this method simply returns what should be considered the front buffer
+	// this method returns what should be considered the front buffer
 	// we're simply using the shared texture directly 
 	//
-	// ... this method could be expanded on to handle synchronization through a keyed mutex
+	// ... this method could be expanded on to handle 
+	// synchronization through a keyed mutex
 	// 
 	shared_ptr<d3d11::Texture2D> swap(shared_ptr<d3d11::Context> const& ctx)
 	{
@@ -525,7 +527,7 @@ public:
 			nullptr);
 
 		// create a new layer to handle drawing for the web popup
-		auto const layer = create_web_layer(device_, view);
+		auto const layer = create_web_layer(device_, true, view);
 		if (!layer) {
 			return true; // prevent popup
 		}
@@ -533,11 +535,12 @@ public:
 		composition->add_layer(layer);
 
 		// center the popup within the composition
-
 		auto const outer_width = composition->width();
 		auto const outer_height = composition->height();
 		if (outer_width > 0 && outer_height > 0)
 		{
+			// convert popup dimensions to normalized units
+			// for composition space
 			auto const sx = width / float(outer_width);
 			auto const sy = height / float(outer_height);			
 			layer->move(0.5f - (sx / 2), 0.5f - (sy / 2), sx, sy);
@@ -558,12 +561,13 @@ public:
 		return frame_buffer_->swap(ctx);
 	}
 
-	void tick(shared_ptr<Composition> const& composition, double t)
+	void tick(double t)
 	{
-		decltype(browser_) browser;
+		shared_ptr<Composition> composition;
+		auto const browser = safe_browser();
 		{
 			lock_guard<mutex> guard(lock_);
-			browser = browser_;
+			composition = composition_.lock();
 		}
 
 		// the javascript might be interested in our 
@@ -608,15 +612,10 @@ public:
 		// only signal change if necessary
 		if (width != width_ || height != height_)
 		{
-			decltype(browser_) browser;
-			{
-				lock_guard<mutex> guard(lock_);
-				browser = browser_;
-			}
-
 			width_ = width;
 			height_ = height;
-
+			
+			auto const browser = safe_browser();
 			if (browser)
 			{
 				browser->GetHost()->WasResized();
@@ -635,8 +634,40 @@ public:
 		}
 	}
 
+	void mouse_click(MouseButton button, bool up, int32_t x, int32_t y)
+	{
+		auto const browser = safe_browser();
+		if (browser) 
+		{
+			CefMouseEvent mouse;
+			mouse.x = x;
+			mouse.y = y;
+			mouse.modifiers = 0;
+			
+			cef_mouse_button_type_t ctype;
+			switch (button)
+			{
+				case MouseButton::Middle: ctype = MBT_MIDDLE; break;
+				case MouseButton::Right: ctype = MBT_RIGHT; break;
+				case MouseButton::Left: ctype = MBT_LEFT;
+				default:break;			
+			}
+			browser->GetHost()->SendMouseClickEvent(mouse, ctype, up, 1);
+		}
+	}
+
+	//void mouse_click(MouseButton button, bool up, int32_t x, int32_t y)
+	//{
+	//}
+
 private:
 	IMPLEMENT_REFCOUNTING(WebView);
+
+	CefRefPtr<CefBrowser> safe_browser() 
+	{		
+		lock_guard<mutex> guard(lock_);
+		return browser_;
+	}
 
 	string name_;
 	int width_;
@@ -658,14 +689,13 @@ class WebLayer : public Layer
 public:
 	WebLayer(
 		std::shared_ptr<d3d11::Device> const& device,
+		bool want_input,
 		CefRefPtr<WebView> const& view)
-		: Layer(device, true)
-		, view_(view)
-	{
+		: Layer(device, want_input, true)
+		, view_(view) {
 	}
 
-	~WebLayer()
-	{
+	~WebLayer() {
 		if (view_) {
 			view_->close();
 		}
@@ -704,7 +734,7 @@ public:
 			if (view_)
 			{
 				view_->resize(width, height);
-				view_->tick(comp, t);
+				view_->tick(t);
 			}
 		}
 
@@ -713,13 +743,19 @@ public:
 
 	void render(shared_ptr<d3d11::Context> const& ctx) override
 	{
-		if (view_) 
-		{
-			// simply use the base class method to draw our texture
+		// simply use the base class method to draw our texture
+		if (view_)  {
 			render_texture(ctx, view_->texture(ctx));
 		}
 	}
 
+	void mouse_click(MouseButton button, bool down, int32_t x, int32_t y) override
+	{
+		if (view_) {
+			view_->mouse_click(button, down, x, y);
+		}
+	}
+	
 private:
 
 	CefRefPtr<WebView> const view_;
@@ -846,10 +882,11 @@ void CefModule::message_loop()
 //
 shared_ptr<Layer> create_web_layer(
 	std::shared_ptr<d3d11::Device> const& device,
+	bool want_input,
 	CefRefPtr<WebView> const& view)
 {
 	if (device && view) {
-		return make_shared<WebLayer>(device, view);
+		return make_shared<WebLayer>(device, want_input, view);
 	}
 	return nullptr;
 }
@@ -860,7 +897,10 @@ shared_ptr<Layer> create_web_layer(
 shared_ptr<Layer> create_web_layer(
 	std::shared_ptr<d3d11::Device> const& device,
 	string const& url,
-	int width, int height, bool view_source)
+	int width, 
+	int height, 
+	bool want_input,
+	bool view_source)
 {
 	CefWindowInfo window_info;
 	window_info.SetAsWindowless(nullptr);
@@ -911,7 +951,7 @@ shared_ptr<Layer> create_web_layer(
 			settings, 
 			nullptr);
 
-	return create_web_layer(device, view);
+	return create_web_layer(device, want_input, view);
 }
 
 //

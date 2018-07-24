@@ -16,6 +16,5 @@
 #include <Shellapi.h>
 #include <Shlwapi.h>
 #include <ShlObj.h>
-
 #include <assert.h>
 

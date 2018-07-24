@@ -38,6 +38,7 @@ public:
 	~ComInitializer() { CoUninitialize(); }
 };
 
+std::shared_ptr<Composition> composition_;
 
 int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 {
@@ -180,6 +181,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 					builder << "      \"top\":" << (y * cy) << "," << std::endl;
 					builder << "      \"width\":" << cx << "," << std::endl;
 					builder << "      \"height\":" << cy << "," << std::endl;
+					builder << "      \"want_input\":true," << std::endl;
 					builder << "      \"view_source\":" << (view_source ? "true" : "false");					
 					builder << "    }," << std::endl;
 				}
@@ -200,7 +202,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 					     << "      \"src\":\"" << hud_url << "\"," << std::endl
 					     << "      \"top\":0.95," << std::endl
 					     << "      \"height\":0.05," << std::endl
-					     << "      \"view_source\":" << (view_source ? "true" : "false")
+						  << "      \"view_source\":" << (view_source ? "true" : "false")
 					     << "    }" << std::endl;
 			}
 		}
@@ -210,8 +212,8 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	}
 
 	// create a composition to represent our 2D-scene
-	auto composition = create_composition(device, json);
-	if (!composition) {
+	composition_ = create_composition(device, json);
+	if (!composition_) {
 		assert(0);
 		cef_uninitialize();
 		return 0;
@@ -226,7 +228,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 
 	// create a window with our specific size
 	auto const window = create_window(
-			instance, title, composition->width(), composition->height());
+			instance, title, composition_->width(), composition_->height());
 	if (!IsWindow(window)) {
 		assert(0);
 		cef_uninitialize();
@@ -268,7 +270,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 		{
 			// update composition + layers based on time
 			auto const t = (time_now() - start_time) / 1000000.0;
-			composition->tick(t);
+			composition_->tick(t);
 
 			swapchain->bind(ctx);
 
@@ -283,7 +285,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 				if (width && height)
 				{
 					resize_ = false;
-					composition->resize(sync_interval_ != 0, width, height);
+					composition_->resize(sync_interval_ != 0, width, height);
 					swapchain->resize(width, height);
 				}
 			}
@@ -292,7 +294,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 			swapchain->clear(0.0f, 0.0f, 1.0f, 1.0f);
 
 			// render our scene
-			composition->render(ctx);
+			composition_->render(ctx);
 
 			// present to window
 			swapchain->present(sync_interval_);
@@ -300,7 +302,7 @@ int APIENTRY wWinMain(HINSTANCE instance, HINSTANCE, LPWSTR, int)
 	}
 
 	// force layers to be destroyed
-	composition.reset();
+	composition_.reset();
 
 	cef_uninitialize();
 	return 0;
@@ -349,6 +351,18 @@ HWND create_window(HINSTANCE instance, std::string const& title, int width, int 
 	return hwnd;
 }
 
+//
+// forward a Windows WM_XXX mouse Up/Down notification to the layers
+//
+void forward_click(MouseButton button, bool up, LPARAM lparam)
+{
+	auto const x = ((int)(short)LOWORD(lparam));
+	auto const y = ((int)(short)HIWORD(lparam));	
+	if (composition_) {
+		composition_->mouse_click(button, up, x, y);
+	}
+}
+
 LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 {
 	switch (msg)
@@ -366,6 +380,15 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 				sync_interval_ = sync_interval_ ? 0 : 1;
 				resize_ = true;
 			}
+			break;
+
+		case WM_LBUTTONDOWN: forward_click(MouseButton::Left, false, lparam);
+			break;
+		case WM_LBUTTONUP: forward_click(MouseButton::Left, true, lparam);
+			break;
+		case WM_RBUTTONDOWN: forward_click(MouseButton::Right, false, lparam);
+			break;
+		case WM_RBUTTONUP: forward_click(MouseButton::Right, true, lparam);
 			break;
 
 		case WM_SIZE: 

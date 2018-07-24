@@ -5,30 +5,37 @@
 
 using namespace std;
 
-Layer::Layer(shared_ptr<d3d11::Device> const& device, bool flip)
+Layer::Layer(
+	shared_ptr<d3d11::Device> const& device, bool want_input, bool flip)
 	: device_(device)
 	, flip_(flip)
+	, want_input_(want_input)
 {
 	bounds_.x = bounds_.y = bounds_.width = bounds_.height = 0.0f;
 }
 
-Layer::~Layer() 
-{
+Layer::~Layer() {
 }
 
-void Layer::attach(std::shared_ptr<Composition> const& parent)
-{
+void Layer::attach(std::shared_ptr<Composition> const& parent) {
 	composition_ = parent;
 }
 
-shared_ptr<Composition> Layer::composition() const
-{
+shared_ptr<Composition> Layer::composition() const {
 	return composition_.lock();
 }
 
-Rect Layer::bounds() const
-{
+Rect Layer::bounds() const {
 	return bounds_;
+}
+
+bool Layer::want_input() const {
+	return want_input_;
+}
+
+void Layer::mouse_click(MouseButton, bool, int32_t, int32_t)
+{
+	// default is to do nothing with input
 }
 
 void Layer::move(float x, float y, float width, float height)
@@ -108,7 +115,10 @@ double Composition::fps() const
 
 void Composition::add_layer(shared_ptr<Layer> const& layer)
 {
-	if (layer) {
+	if (layer) 
+	{
+		lock_guard<mutex> guard(lock_);
+
 		layers_.push_back(layer);
 
 		// attach ourself as the parent
@@ -126,6 +136,8 @@ void Composition::resize(bool vsync, int width, int height)
 void Composition::tick(double t)
 {
 	time_ = t;
+
+	lock_guard<mutex> guard(lock_);
 	for (auto const& layer : layers_) {
 		layer->tick(t);
 	}
@@ -135,8 +147,11 @@ void Composition::render(shared_ptr<d3d11::Context> const& ctx)
 {
 	// pretty simple ... just use painter's algorithm and render 
 	// our layers in order (not doing any depth or 3D here)
-	for (auto const& layer : layers_) {
-		layer->render(ctx);
+	{
+		lock_guard<mutex> guard(lock_);
+		for (auto const& layer : layers_) {
+			layer->render(ctx);
+		}
 	}
 
 	frame_++;
@@ -147,6 +162,47 @@ void Composition::render(shared_ptr<d3d11::Context> const& ctx)
 		//log_message("composition: fps: %3.2f\n", fps_);
 		frame_ = 0;
 		fps_start_ = time_now();
+	}
+}
+
+void Composition::mouse_click(MouseButton button, bool up, int32_t x, int32_t y)
+{
+	auto const w = width();
+	auto const h = height();
+	
+	// get thread-safe copy
+	decltype(layers_) layers;
+	{
+		lock_guard<mutex> guard(lock_);
+		layers.assign(layers_.begin(), layers_.end());
+	}
+
+	//
+	// walk layers from front to back and find one 
+	// that contains the mouse point (and wants input)
+	//
+	for (auto i = layers.rbegin(); i != layers.rend(); i++)
+	{
+		auto const l = (*i);
+		if (l->want_input())
+		{
+			auto bounds = l->bounds();
+
+			// convert to screen space
+			auto const sx = static_cast<int32_t>(bounds.x * w);
+			auto const sw = static_cast<int32_t>(bounds.width * w);
+			auto const sy = static_cast<int32_t>(bounds.y * h);
+			auto const sh = static_cast<int32_t>(bounds.height * h);
+			if (x >= sx && x < (sx + sw))
+			{
+				if (y >= sy && y < (sy + sh))
+				{
+					// forward to layer - making x, y relative to layer
+					l->mouse_click(button, up, x - sx, y - sy);
+					break;
+				}
+			}
+		}
 	}
 }
 
@@ -210,8 +266,11 @@ shared_ptr<Layer> to_layer(
 	}
 	else if (type == "web") 
 	{
+		auto const want_input = dict->GetBool("want_input");
+		auto const view_source = dict->GetBool("view_source");
+
 		return create_web_layer(
-			device, src, width, height, dict->GetBool("view_source"));
+			device, src, width, height, want_input, view_source);
 	}
 
 	return nullptr;
