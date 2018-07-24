@@ -656,9 +656,18 @@ public:
 		}
 	}
 
-	//void mouse_click(MouseButton button, bool up, int32_t x, int32_t y)
-	//{
-	//}
+	void mouse_move(bool leave, int32_t x, int32_t y)
+	{
+		auto const browser = safe_browser();
+		if (browser)
+		{
+			CefMouseEvent mouse;
+			mouse.x = x;
+			mouse.y = y;
+			mouse.modifiers = 0;
+			browser->GetHost()->SendMouseMoveEvent(mouse, leave);
+		}
+	}
 
 private:
 	IMPLEMENT_REFCOUNTING(WebView);
@@ -749,10 +758,17 @@ public:
 		}
 	}
 
-	void mouse_click(MouseButton button, bool down, int32_t x, int32_t y) override
+	void mouse_click(MouseButton button, bool up, int32_t x, int32_t y) override
 	{
 		if (view_) {
-			view_->mouse_click(button, down, x, y);
+			view_->mouse_click(button, up, x, y);
+		}
+	}
+
+	void mouse_move(bool leave, int32_t x, int32_t y) override
+	{
+		if (view_) {
+			view_->mouse_move(leave, x, y);
 		}
 	}
 	

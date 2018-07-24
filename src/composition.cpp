@@ -38,6 +38,11 @@ void Layer::mouse_click(MouseButton, bool, int32_t, int32_t)
 	// default is to do nothing with input
 }
 
+void Layer::mouse_move(bool, int32_t, int32_t)
+{
+	// default is to do nothing with input
+}
+
 void Layer::move(float x, float y, float width, float height)
 {	
 	bounds_.x = x;
@@ -167,9 +172,27 @@ void Composition::render(shared_ptr<d3d11::Context> const& ctx)
 
 void Composition::mouse_click(MouseButton button, bool up, int32_t x, int32_t y)
 {
+	// forward to layer - making x, y relative to layer
+	auto const layer = layer_from_point(x, y);
+	if (layer) {
+		layer->mouse_click(button, up, x, y);
+	}
+}
+
+void Composition::mouse_move(bool leave, int32_t x, int32_t y)
+{
+	// forward to layer - making x, y relative to layer
+	auto const layer = layer_from_point(x, y);
+	if (layer) {
+		layer->mouse_move(leave, x, y);
+	}
+}
+
+shared_ptr<Layer> Composition::layer_from_point(int32_t& x, int32_t& y)
+{
 	auto const w = width();
 	auto const h = height();
-	
+
 	// get thread-safe copy
 	decltype(layers_) layers;
 	{
@@ -195,15 +218,18 @@ void Composition::mouse_click(MouseButton button, bool up, int32_t x, int32_t y)
 			auto const sh = static_cast<int32_t>(bounds.height * h);
 			if (x >= sx && x < (sx + sw))
 			{
-				if (y >= sy && y < (sy + sh))
+				if (y >= sy && y < (sy + sh)) 
 				{
-					// forward to layer - making x, y relative to layer
-					l->mouse_click(button, up, x - sx, y - sy);
-					break;
+					// convert points to relative
+					x = x - sx;
+					y = y - sy;
+					return l;
 				}
 			}
 		}
 	}
+
+	return nullptr;
 }
 
 int to_int(CefRefPtr<CefDictionaryValue> const& dict, string const& key, int default_value)

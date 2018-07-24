@@ -354,12 +354,24 @@ HWND create_window(HINSTANCE instance, std::string const& title, int width, int 
 //
 // forward a Windows WM_XXX mouse Up/Down notification to the layers
 //
-void forward_click(MouseButton button, bool up, LPARAM lparam)
+void on_mouse_click(MouseButton button, bool up, LPARAM lparam)
 {
 	auto const x = ((int)(short)LOWORD(lparam));
 	auto const y = ((int)(short)HIWORD(lparam));	
 	if (composition_) {
 		composition_->mouse_click(button, up, x, y);
+	}
+}
+
+//
+// forward a Windows WM_XXX mouse move notification to the layers
+//
+void on_mouse_move(bool leave, LPARAM lparam)
+{
+	auto const x = ((int)(short)LOWORD(lparam));
+	auto const y = ((int)(short)HIWORD(lparam));
+	if (composition_) {
+		composition_->mouse_move(leave, x, y);
 	}
 }
 
@@ -382,13 +394,16 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			}
 			break;
 
-		case WM_LBUTTONDOWN: forward_click(MouseButton::Left, false, lparam);
+		case WM_LBUTTONDOWN: on_mouse_click(MouseButton::Left, false, lparam);
 			break;
-		case WM_LBUTTONUP: forward_click(MouseButton::Left, true, lparam);
+		case WM_LBUTTONUP: on_mouse_click(MouseButton::Left, true, lparam);
 			break;
-		case WM_RBUTTONDOWN: forward_click(MouseButton::Right, false, lparam);
+		case WM_RBUTTONDOWN: on_mouse_click(MouseButton::Right, false, lparam);
 			break;
-		case WM_RBUTTONUP: forward_click(MouseButton::Right, true, lparam);
+		case WM_RBUTTONUP: on_mouse_click(MouseButton::Right, true, lparam);
+			break;
+
+		case WM_MOUSEMOVE: on_mouse_move(false, lparam);
 			break;
 
 		case WM_SIZE: 

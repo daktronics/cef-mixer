@@ -40,7 +40,9 @@ public:
 	
 	virtual void tick(double);
 	virtual void render(std::shared_ptr<d3d11::Context> const&) = 0;
+	
 	virtual void mouse_click(MouseButton button, bool up, int32_t x, int32_t y);
+	virtual void mouse_move(bool leave, int32_t x, int32_t y);
 
 	Rect bounds() const;
 	
@@ -91,8 +93,11 @@ public:
 	void resize(bool vsync, int width, int height);
 
 	void mouse_click(MouseButton button, bool up, int32_t x, int32_t y);
+	void mouse_move(bool leave, int32_t x, int32_t y);
 
 private:
+
+	std::shared_ptr<Layer> layer_from_point(int32_t& x, int32_t& y);
 
 	int width_;
 	int height_;
