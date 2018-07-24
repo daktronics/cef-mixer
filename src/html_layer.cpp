@@ -253,7 +253,7 @@ public:
 	//
 	// called in response to Cef's OnAcceleratedPaint notification
 	//
-	void on_paint(void* shared_handle, uint64_t /*sync_key*/)
+	void on_paint(void* shared_handle)
 	{
 		// Note: we're not handling keyed mutexes yet
 
@@ -414,8 +414,7 @@ public:
 		CefRefPtr<CefBrowser> /*browser*/,
 		PaintElementType type,
 		const RectList& dirtyRects,
-		void* share_handle, 
-		uint64 sync_key) override
+		void* share_handle) override
 	{
 		if (type == PET_POPUP) {
 			return;
@@ -439,7 +438,7 @@ public:
 		}
 
 		if (frame_buffer_) {
-			frame_buffer_->on_paint((void*)share_handle, sync_key);
+			frame_buffer_->on_paint((void*)share_handle);
 		}
 	}
 
@@ -512,7 +511,7 @@ public:
 
 		// optionally issue a BeginFrame request
 		if (send_begin_frame_ && browser) {		
-			browser->GetHost()->SendExternalBeginFrame(0, 0, 0);
+			browser->GetHost()->SendExternalBeginFrame();
 		}
 	}
 
