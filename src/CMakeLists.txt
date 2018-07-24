@@ -6,7 +6,7 @@ set(ALL_SRCS
 	d3d11.h
 	d3d11.cpp
 	image_layer.cpp
-	html_layer.cpp
+	web_layer.cpp
 	main.cpp
 	platform.h
 	resource.h

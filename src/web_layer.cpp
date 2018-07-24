@@ -58,6 +58,15 @@ CefRefPtr<CefV8Value> to_v8object(CefRefPtr<CefDictionaryValue> const& dictionar
 	return obj;
 }
 
+class WebView;
+
+//
+// internal factory method so popups can create layers on the fly
+//
+shared_ptr<Layer> create_web_layer(
+	std::shared_ptr<d3d11::Device> const& device,
+	CefRefPtr<WebView> const& view);
+
 //
 // V8 handler for our 'mixer' object available to javascript
 // running in a page within this application
@@ -133,12 +142,12 @@ private:
 };
 
 
-class HtmlApp : public CefApp, 
+class WebApp : public CefApp, 
 					public CefBrowserProcessHandler,
 	            public CefRenderProcessHandler
 {
 public:
-	HtmlApp() {
+	WebApp() {
 	}
 
 	CefRefPtr<CefBrowserProcessHandler> GetBrowserProcessHandler() override {
@@ -232,7 +241,7 @@ public:
 
 private:
 
-	IMPLEMENT_REFCOUNTING(HtmlApp);
+	IMPLEMENT_REFCOUNTING(WebApp);
 
 	CefRefPtr<MixerHandler> mixer_handler_;
 };
@@ -241,7 +250,7 @@ private:
 class FrameBuffer
 {
 public:
-	FrameBuffer(std::shared_ptr<d3d11::Device> const& device)
+	FrameBuffer(shared_ptr<d3d11::Device> const& device)
 		: device_(device)
 		, abort_(false)	{
 	}
@@ -326,13 +335,13 @@ private:
 };
 
 
-class HtmlView : public CefClient,
+class WebView : public CefClient,
 	public CefRenderHandler,
 	public CefLifeSpanHandler,
 	public CefLoadHandler
 {
 public:
-	HtmlView(
+	WebView(
 			string const& name,
 			shared_ptr<d3d11::Device> const& device,
 			int width, int height, bool send_begin_Frame)
@@ -342,13 +351,23 @@ public:
 		, frame_buffer_(make_shared<FrameBuffer>(device))
 		, needs_stats_update_(false)
 		, send_begin_frame_(send_begin_Frame)
+		, device_(device)
 	{
 		frame_ = 0;
 		fps_start_ = 0ull;
 	}
 
-	~HtmlView() {
+	~WebView() {
 		close();
+	}
+
+	//
+	// we'll use the composition to handle new popup layer
+	//
+	void attach(shared_ptr<Composition> const& comp)
+	{
+		lock_guard<mutex> guard(lock_);
+		composition_ = comp;
 	}
 
 	void close()
@@ -416,10 +435,6 @@ public:
 		const RectList& dirtyRects,
 		void* share_handle) override
 	{
-		if (type == PET_POPUP) {
-			return;
-		}
-
 		frame_++;
 
 		auto const now = time_now();
@@ -470,15 +485,63 @@ public:
 		const CefString& target_frame_name,
 		WindowOpenDisposition target_disposition,
 		bool user_gesture,
-		const CefPopupFeatures& popupFeatures,
-		CefWindowInfo& windowInfo,
+		const CefPopupFeatures& popup_features,
+		CefWindowInfo& window_info,
 		CefRefPtr<CefClient>& client,
 		CefBrowserSettings& settings,
 		bool* no_javascript_access) override 
 	{
-		// todo: add support for accelerated popups in this app
-		//windowInfo.SetAsWindowless(nullptr);
-		//windowInfo.shared_textures_enabled = true;
+		shared_ptr<Composition> composition;
+		{
+			lock_guard<mutex> guard(lock_);
+			composition = composition_.lock();
+		}
+
+		// we need a composition to add new popup layers to
+		if (!composition) {
+			return true; // prevent popup
+		}
+
+		window_info.SetAsWindowless(nullptr);
+		window_info.shared_texture_enabled = true;
+		window_info.external_begin_frame_enabled = send_begin_frame_;
+
+		// pick some dimensions
+		auto const width = popup_features.widthSet ? popup_features.width : 400;
+		auto const height = popup_features.heightSet ? popup_features.height : 300;
+
+		CefRefPtr<WebView> view(new WebView(
+			target_frame_name, 
+			device_, 
+			width, 
+			height, 
+			send_begin_frame_));
+		
+		CefBrowserHost::CreateBrowser(
+			window_info,
+			view,
+			target_url,
+			settings,
+			nullptr);
+
+		// create a new layer to handle drawing for the web popup
+		auto const layer = create_web_layer(device_, view);
+		if (!layer) {
+			return true; // prevent popup
+		}
+
+		composition->add_layer(layer);
+
+		// center the popup within the composition
+
+		auto const outer_width = composition->width();
+		auto const outer_height = composition->height();
+		if (outer_width > 0 && outer_height > 0)
+		{
+			auto const sx = width / float(outer_width);
+			auto const sy = height / float(outer_height);			
+			layer->move(0.5f - (sx / 2), 0.5f - (sy / 2), sx, sy);
+		}
 
 		return false;
 	}
@@ -573,7 +636,7 @@ public:
 	}
 
 private:
-	IMPLEMENT_REFCOUNTING(HtmlView);
+	IMPLEMENT_REFCOUNTING(WebView);
 
 	string name_;
 	int width_;
@@ -585,24 +648,40 @@ private:
 	CefRefPtr<CefBrowser> browser_;
 	bool needs_stats_update_;
 	bool send_begin_frame_;
+	weak_ptr<Composition> composition_;
+	shared_ptr<d3d11::Device> const device_;
 };
 
 
-class HtmlLayer : public Layer
+class WebLayer : public Layer
 {
 public:
-	HtmlLayer(
+	WebLayer(
 		std::shared_ptr<d3d11::Device> const& device,
-		CefRefPtr<HtmlView> const& view)
+		CefRefPtr<WebView> const& view)
 		: Layer(device, true)
 		, view_(view)
 	{
 	}
 
-	~HtmlLayer()
+	~WebLayer()
 	{
 		if (view_) {
 			view_->close();
+		}
+	}
+
+	//
+	// forward composition reference to our view
+	// it may use it for popup layers
+	//
+	void attach(std::shared_ptr<Composition> const& comp) override
+	{
+		Layer::attach(comp);
+
+		// let our view know about the composition
+		if (view_) {
+			view_->attach(comp);
 		}
 	}
 
@@ -643,7 +722,7 @@ public:
 
 private:
 
-	CefRefPtr<HtmlView> const view_;
+	CefRefPtr<WebView> const view_;
 };
 
 //
@@ -743,7 +822,7 @@ void CefModule::message_loop()
 	//settings.single_process = true;
 #endif
 
-	CefRefPtr<HtmlApp> app(new HtmlApp());
+	CefRefPtr<WebApp> app(new WebApp());
 
 	CefMainArgs main_args(module_);
 	CefInitialize(main_args, settings, app, nullptr);
@@ -763,6 +842,19 @@ void CefModule::message_loop()
 }
 
 //
+// internal factory method so popups can create layers on the fly
+//
+shared_ptr<Layer> create_web_layer(
+	std::shared_ptr<d3d11::Device> const& device,
+	CefRefPtr<WebView> const& view)
+{
+	if (device && view) {
+		return make_shared<WebLayer>(device, view);
+	}
+	return nullptr;
+}
+
+//
 // use CEF to load and render a web page within a layer
 //
 shared_ptr<Layer> create_web_layer(
@@ -775,13 +867,7 @@ shared_ptr<Layer> create_web_layer(
 
 	// we want to use OnAcceleratedPaint
 	window_info.shared_texture_enabled = true;
-
-	// We can set the shared_texture_sync_key to 0 so Chromium will 
-	// setup the shared texture with a keyed mutex.  
-	// The Keyed Mutex is a work-in-progress and it is disabled by default
-	// (currently this application is NOT using keyed mutexes)
-	//window_info.shared_texture_sync_key = 0;
-
+	
 	// we are going to issue calls to SendExternalBeginFrame
 	// and CEF will not use its internal BeginFrameTimer in this case
 	window_info.external_begin_frame_enabled = true;
@@ -801,7 +887,7 @@ shared_ptr<Layer> create_web_layer(
 	string name;
 
 	// generate a name for the view based on the url - with the view
-	// source option, we'll dump the page DOM source to a temporaty file
+	// source option, we'll dump the page DOM source to a temporary file
 	//
 	// under <USER>\AppData\LocalData\cefmixer
 	//
@@ -815,7 +901,7 @@ shared_ptr<Layer> create_web_layer(
 		}
 	}
 
-	CefRefPtr<HtmlView> view(new HtmlView(
+	CefRefPtr<WebView> view(new WebView(
 			name, device, width, height, window_info.external_begin_frame_enabled));
 
 	CefBrowserHost::CreateBrowser(
@@ -825,7 +911,7 @@ shared_ptr<Layer> create_web_layer(
 			settings, 
 			nullptr);
 
-	return make_shared<HtmlLayer>(device, view);
+	return create_web_layer(device, view);
 }
 
 //
@@ -837,7 +923,7 @@ int cef_initialize(HINSTANCE instance)
 
 	{ // check first if we need to run as a worker process
 
-		CefRefPtr<HtmlApp> app(new HtmlApp());
+		CefRefPtr<WebApp> app(new WebApp());
 		CefMainArgs main_args(instance);
 		int exit_code = CefExecuteProcess(main_args, app, nullptr);
 		if (exit_code >= 0) {

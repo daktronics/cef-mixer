@@ -25,7 +25,7 @@ public:
 	Layer(std::shared_ptr<d3d11::Device> const& device, bool flip);
 	~Layer();
 
-	void attach(std::shared_ptr<Composition> const&);
+	virtual void attach(std::shared_ptr<Composition> const&);
 
 	virtual void move(float x, float y, float width, float height);	
 	
