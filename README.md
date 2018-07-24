@@ -118,8 +118,7 @@ void OnAcceleratedPaint(
 		CefRefPtr<CefBrowser> browser,
 		PaintElementType type,
 		const RectList& dirtyRects,
-		void* share_handle, 
-		uint64 sync_key) override
+		void* share_handle) override
 {
 }
 ```
