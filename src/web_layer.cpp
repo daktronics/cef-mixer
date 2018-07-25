@@ -256,6 +256,20 @@ public:
 		, abort_(false)	{
 	}
 
+	int32_t width() {
+		if (shared_buffer_) {
+			return shared_buffer_->width();
+		}
+		return 0;
+	}
+
+	int32_t height() {
+		if (shared_buffer_) {
+			return shared_buffer_->height();
+		}
+		return 0;
+	}
+
 	void abort() {
 		abort_ = true;
 	}
@@ -438,24 +452,26 @@ public:
 		void* share_handle) override
 	{
 		frame_++;
-
 		auto const now = time_now();
 		if (!fps_start_) {
 			fps_start_ = now;
+		}
+
+		if (frame_buffer_) {
+			frame_buffer_->on_paint((void*)share_handle);
 		}
 
 		if ((now - fps_start_) > 1000000)
 		{
 			auto const fps = frame_ / double((now - fps_start_) / 1000000.0);
 
-			log_message("html: OnAcceleratedPaint fps: %3.2f\n", fps);
-			
+			auto const w = frame_buffer_ ? frame_buffer_->width() : 0;
+			auto const h = frame_buffer_ ? frame_buffer_->height() : 0;
+
+			log_message("html: OnAcceleratedPaint (%dx%d), fps: %3.2f\n", w, h, fps);
+
 			frame_ = 0;
 			fps_start_ = time_now();
-		}
-
-		if (frame_buffer_) {
-			frame_buffer_->on_paint((void*)share_handle);
 		}
 	}
 
