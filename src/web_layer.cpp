@@ -471,8 +471,8 @@ public:
 		}
 		else 
 		{
-			// just update the popup frame ... we only tracking metrics
-			// for the view
+			// just update the popup frame ... we are only tracking 
+			// metrics for the view
 
 			if (popup_buffer_) {
 				popup_buffer_->on_paint((void*)share_handle);
@@ -503,17 +503,13 @@ public:
 	}
 
 	void OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) override 
-	{
-		
+	{		
 		log_message("show popup");
 	}
 
 	void OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) override
 	{
 		log_message("size popup - %d,%d  %dx%d\n", rect.x, rect.y, rect.width, rect.height);
-		browser->GetHost()->WasResized();
-		browser->GetHost()->Invalidate(PET_POPUP);
-
 	}
 
 	bool OnBeforePopup(CefRefPtr<CefBrowser> browser,
