@@ -184,8 +184,11 @@ public:
 		// requiring the muted attribute or user interaction
 		command_line->AppendSwitchWithValue("autoplay-policy", "no-user-gesture-required");
 
-		//command_line->AppendSwitchWithValue("use-cmd-decoder", "validating");
-
+#if !defined(NDEBUG)
+		// ~RenderProcessHostImpl() complains about DCHECK(is_self_deleted_)
+		// when we run single process mode ... I haven't figured out how to resolve yet
+		command_line->AppendSwitch("single-process");
+#endif
 	}
 
 	virtual void OnContextInitialized() override {
@@ -252,8 +255,7 @@ class FrameBuffer
 {
 public:
 	FrameBuffer(shared_ptr<d3d11::Device> const& device)
-		: device_(device)
-		, abort_(false)	{
+		: device_(device) {
 	}
 
 	int32_t width() {
@@ -270,10 +272,6 @@ public:
 		return 0;
 	}
 
-	void abort() {
-		abort_ = true;
-	}
-
 	//
 	// called in response to Cef's OnAcceleratedPaint notification
 	//
@@ -281,25 +279,22 @@ public:
 	{
 		// Note: we're not handling keyed mutexes yet
 
-		if (!abort_)
+		lock_guard<mutex> guard(lock_);
+
+		// did the shared texture change?
+		if (shared_buffer_)
 		{
-			lock_guard<mutex> guard(lock_);
-
-			// did the shared texture change?
-			if (shared_buffer_)
-			{
-				if (shared_handle != shared_buffer_->share_handle()) {
-					shared_buffer_.reset();
-				}
+			if (shared_handle != shared_buffer_->share_handle()) {
+				shared_buffer_.reset();
 			}
+		}
 
-			// open the shared texture
-			if (!shared_buffer_) 
-			{
-				shared_buffer_ = device_->open_shared_texture((void*)shared_handle);				
-				if (!shared_buffer_) {
-					log_message("could not open shared texture!");
-				}
+		// open the shared texture
+		if (!shared_buffer_) 
+		{
+			shared_buffer_ = device_->open_shared_texture((void*)shared_handle);				
+			if (!shared_buffer_) {
+				log_message("could not open shared texture!");
 			}
 		}
 	}
@@ -364,7 +359,8 @@ public:
 		: name_(name)
 		, width_(width)
 		, height_(height)
-		, frame_buffer_(make_shared<FrameBuffer>(device))
+		, view_buffer_(make_shared<FrameBuffer>(device))
+		, popup_buffer_(make_shared<FrameBuffer>(device))
 		, needs_stats_update_(false)
 		, send_begin_frame_(send_begin_Frame)
 		, device_(device)
@@ -388,9 +384,6 @@ public:
 
 	void close()
 	{
-		// break out of a pending wait
-		frame_buffer_->abort();
-
 		// get thread-safe reference
 		decltype(browser_) browser;
 		{
@@ -451,27 +444,39 @@ public:
 		const RectList& dirtyRects,
 		void* share_handle) override
 	{
-		frame_++;
-		auto const now = time_now();
-		if (!fps_start_) {
-			fps_start_ = now;
-		}
-
-		if (frame_buffer_) {
-			frame_buffer_->on_paint((void*)share_handle);
-		}
-
-		if ((now - fps_start_) > 1000000)
+		if (type == PET_VIEW)
 		{
-			auto const fps = frame_ / double((now - fps_start_) / 1000000.0);
+			frame_++;
+			auto const now = time_now();
+			if (!fps_start_) {
+				fps_start_ = now;
+			}
+			
+			if (view_buffer_) {
+				view_buffer_->on_paint((void*)share_handle);
+			}
+			
+			if ((now - fps_start_) > 1000000)
+			{
+				auto const fps = frame_ / double((now - fps_start_) / 1000000.0);
 
-			auto const w = frame_buffer_ ? frame_buffer_->width() : 0;
-			auto const h = frame_buffer_ ? frame_buffer_->height() : 0;
+				auto const w = view_buffer_ ? view_buffer_->width() : 0;
+				auto const h = view_buffer_ ? view_buffer_->height() : 0;
 
-			log_message("html: OnAcceleratedPaint (%dx%d), fps: %3.2f\n", w, h, fps);
+				log_message("html: OnAcceleratedPaint (%dx%d), fps: %3.2f\n", w, h, fps);
 
-			frame_ = 0;
-			fps_start_ = time_now();
+				frame_ = 0;
+				fps_start_ = time_now();
+			}
+		}
+		else 
+		{
+			// just update the popup frame ... we only tracking metrics
+			// for the view
+
+			if (popup_buffer_) {
+				popup_buffer_->on_paint((void*)share_handle);
+			}
 		}
 	}
 
@@ -495,6 +500,20 @@ public:
 				browser_ = browser;
 			}
 		}
+	}
+
+	void OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) override 
+	{
+		
+		log_message("show popup");
+	}
+
+	void OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) override
+	{
+		log_message("size popup - %d,%d  %dx%d\n", rect.x, rect.y, rect.width, rect.height);
+		browser->GetHost()->WasResized();
+		browser->GetHost()->Invalidate(PET_POPUP);
+
 	}
 
 	bool OnBeforePopup(CefRefPtr<CefBrowser> browser,
@@ -574,7 +593,10 @@ public:
 
 	shared_ptr<d3d11::Texture2D> texture(shared_ptr<d3d11::Context> const& ctx)
 	{
-		return frame_buffer_->swap(ctx);
+		if (view_buffer_) {
+			return view_buffer_->swap(ctx);
+		}
+		return nullptr;
 	}
 
 	void tick(double t)
@@ -699,7 +721,8 @@ private:
 	int height_;
 	uint32_t frame_;
 	uint64_t fps_start_;
-	shared_ptr<FrameBuffer> frame_buffer_;
+	shared_ptr<FrameBuffer> view_buffer_;
+	shared_ptr<FrameBuffer> popup_buffer_;
 	mutex lock_;
 	CefRefPtr<CefBrowser> browser_;
 	bool needs_stats_update_;
@@ -883,12 +906,6 @@ void CefModule::message_loop()
 	settings.no_sandbox = true;
 	settings.multi_threaded_message_loop = false;
 	settings.windowless_rendering_enabled = true;
-
-#if !defined(NDEBUG)
-	// ~RenderProcessHostImpl() complains about DCHECK(is_self_deleted_)
-	// when we run single process mode ... I haven't figured out how to resolve yet
-	//settings.single_process = true;
-#endif
 
 	CefRefPtr<WebApp> app(new WebApp());
 
