@@ -131,6 +131,26 @@ void Composition::add_layer(shared_ptr<Layer> const& layer)
 	}
 }
 
+bool Composition::remove_layer(std::shared_ptr<Layer> const& layer)
+{
+	size_t match = 0;
+	if (layer)
+	{
+		lock_guard<mutex> guard(lock_);
+		for (auto i = layers_.begin(); i != layers_.end(); )
+		{
+			if ((*i).get() == layer.get()) {
+				i = layers_.erase(i);
+				++match;
+			}
+			else {
+				i++;
+			}
+		}
+	}
+	return (match > 0);
+}
+
 void Composition::resize(bool vsync, int width, int height)
 {
 	vsync_ = vsync;
@@ -142,21 +162,31 @@ void Composition::tick(double t)
 {
 	time_ = t;
 
-	lock_guard<mutex> guard(lock_);
-	for (auto const& layer : layers_) {
+	// don't hold a lock during tick()
+	decltype(layers_) layers;
+	{
+		lock_guard<mutex> guard(lock_);
+		layers.assign(layers_.begin(), layers_.end());
+	}
+
+	for (auto const& layer : layers) {
 		layer->tick(t);
 	}
 }
 
 void Composition::render(shared_ptr<d3d11::Context> const& ctx)
 {
-	// pretty simple ... just use painter's algorithm and render 
-	// our layers in order (not doing any depth or 3D here)
+	// don't hold a lock during render()
+	decltype(layers_) layers;
 	{
 		lock_guard<mutex> guard(lock_);
-		for (auto const& layer : layers_) {
-			layer->render(ctx);
-		}
+		layers.assign(layers_.begin(), layers_.end());
+	}
+
+	// pretty simple ... just use painter's algorithm and render 
+	// our layers in order (not doing any depth or 3D here)
+	for (auto const& layer : layers) {
+		layer->render(ctx);
 	}
 
 	frame_++;

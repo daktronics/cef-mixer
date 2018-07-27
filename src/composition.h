@@ -90,6 +90,8 @@ public:
 	void render(std::shared_ptr<d3d11::Context> const&);
 	
 	void add_layer(std::shared_ptr<Layer> const& layer);
+	bool remove_layer(std::shared_ptr<Layer> const& layer);
+
 	void resize(bool vsync, int width, int height);
 
 	void mouse_click(MouseButton button, bool up, int32_t x, int32_t y);

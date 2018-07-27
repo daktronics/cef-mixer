@@ -59,14 +59,24 @@ CefRefPtr<CefV8Value> to_v8object(CefRefPtr<CefDictionaryValue> const& dictionar
 }
 
 class WebView;
+class FrameBuffer;
 
 //
-// internal factory method so popups can create layers on the fly
+// internal factory method so popups (window.open()) 
+// can create layers on the fly
 //
 shared_ptr<Layer> create_web_layer(
 	std::shared_ptr<d3d11::Device> const& device,
 	bool want_input,
 	CefRefPtr<WebView> const& view);
+
+//
+// internal factory method so popups (dropdowns, PET_POPUP) 
+// can create simple layers on the fly
+//
+shared_ptr<Layer> create_popup_layer(
+	shared_ptr<d3d11::Device> const& device,
+	shared_ptr<FrameBuffer> const& buffer);
 
 //
 // V8 handler for our 'mixer' object available to javascript
@@ -504,12 +514,55 @@ public:
 
 	void OnPopupShow(CefRefPtr<CefBrowser> browser, bool show) override 
 	{		
-		log_message("show popup");
+		log_message("%s popup\n", show ? "show" : "hide");
+		
+		lock_guard<mutex> guard(lock_);
+		auto const composition = composition_.lock();
+		if (composition) 
+		{
+			if (show) 
+			{
+				// remove existing
+				composition->remove_layer(popup_layer_);
+				
+				// create new layer
+				popup_layer_ = create_popup_layer(device_, popup_buffer_);
+				composition->add_layer(popup_layer_);
+			}
+			else{
+				composition->remove_layer(popup_layer_);
+			}
+		}
 	}
 
 	void OnPopupSize(CefRefPtr<CefBrowser> browser, const CefRect& rect) override
 	{
 		log_message("size popup - %d,%d  %dx%d\n", rect.x, rect.y, rect.width, rect.height);
+
+		decltype(popup_layer_) layer;
+
+		{
+			lock_guard<mutex> guard(lock_);
+			layer = popup_layer_;
+		}
+
+		if (layer) 
+		{
+			auto const composition = layer->composition();
+			if (composition)
+			{
+				auto const outer_width = composition->width();
+				auto const outer_height = composition->height();
+				if (outer_width > 0 && outer_height > 0)
+				{
+					auto const x = rect.x / float(outer_width);
+					auto const y = rect.y / float(outer_height);
+					auto const w = rect.width / float(outer_width);
+					auto const h = rect.height / float(outer_height);
+					layer->move(x, y, w, h);
+				}
+			}
+		}
 	}
 
 	bool OnBeforePopup(CefRefPtr<CefBrowser> browser,
@@ -723,6 +776,8 @@ private:
 	CefRefPtr<CefBrowser> browser_;
 	bool needs_stats_update_;
 	bool send_begin_frame_;
+	
+	shared_ptr<Layer> popup_layer_;
 	weak_ptr<Composition> composition_;
 	shared_ptr<d3d11::Device> const device_;
 };
@@ -811,6 +866,33 @@ private:
 
 	CefRefPtr<WebView> const view_;
 };
+
+//
+// a simple layer that will render out PET_POPUP for a
+// corresponding view
+//
+class PopupLayer : public Layer
+{
+public:
+	PopupLayer(
+		shared_ptr<d3d11::Device> const& device,
+		shared_ptr<FrameBuffer> const& buffer)
+		: Layer(device, false, true)
+		, frame_buffer_(buffer) {
+	}
+
+	void render(shared_ptr<d3d11::Context> const& ctx) override
+	{
+		if (frame_buffer_) {
+			render_texture(ctx, frame_buffer_->swap(ctx));
+		}
+	}
+
+private:
+	shared_ptr<FrameBuffer> const frame_buffer_;
+};
+
+
 
 //
 // Lifetime management for CEF components.  
@@ -997,6 +1079,16 @@ shared_ptr<Layer> create_web_layer(
 			nullptr);
 
 	return create_web_layer(device, want_input, view);
+}
+
+shared_ptr<Layer> create_popup_layer(
+	shared_ptr<d3d11::Device> const& device,
+	shared_ptr<FrameBuffer> const& buffer)
+{
+	if (device && buffer) {
+		return make_shared<PopupLayer>(device, buffer);
+	}
+	return nullptr;
 }
 
 //
