@@ -25,6 +25,7 @@ LRESULT CALLBACK wnd_proc(HWND, UINT, WPARAM, LPARAM);
 
 int sync_interval_ = 1;
 bool resize_ = false;
+bool show_devtools_ = false;
 
 //
 // simple RIAA for CoInitialize/CoUninitialize
@@ -388,9 +389,16 @@ LRESULT CALLBACK wnd_proc(HWND hwnd, UINT msg, WPARAM wparam, LPARAM lparam)
 			break;
 
 		case WM_COMMAND:
-			if (LOWORD(wparam) == ID_WINDOW_VSYNC) {
-				sync_interval_ = sync_interval_ ? 0 : 1;
-				resize_ = true;
+			switch (LOWORD(wparam))
+			{
+				case ID_WINDOW_VSYNC:
+					sync_interval_ = sync_interval_ ? 0 : 1;
+					resize_ = true;
+					break;
+				case ID_VIEW_DEVTOOLS:
+					show_devtools_ = true;
+					break;
+				default: break;
 			}
 			break;
 

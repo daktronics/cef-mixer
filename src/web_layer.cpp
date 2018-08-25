@@ -61,6 +61,15 @@ CefRefPtr<CefV8Value> to_v8object(CefRefPtr<CefDictionaryValue> const& dictionar
 class WebView;
 class FrameBuffer;
 
+extern bool show_devtools_;
+
+class DevToolsClient : public CefClient
+{
+private:
+	IMPLEMENT_REFCOUNTING(DevToolsClient);
+};
+
+
 //
 // internal factory method so popups (window.open()) 
 // can create layers on the fly
@@ -721,6 +730,29 @@ public:
 		}
 	}
 
+	//
+	// from Masako Toda
+	//
+	void show_devtools()
+	{
+		decltype(browser_) browser;
+		{
+			lock_guard<mutex> guard(lock_);
+			browser = browser_;
+		}
+		if (browser)
+		{
+			CefWindowInfo windowInfo;
+			windowInfo.SetAsPopup(nullptr, "Developer Tools");
+			windowInfo.style = WS_VISIBLE | WS_OVERLAPPEDWINDOW;
+			windowInfo.x = 0;
+			windowInfo.y = 0;
+			windowInfo.width = 640;
+			windowInfo.height = 480;
+			browser->GetHost()->ShowDevTools(windowInfo, new DevToolsClient(), CefBrowserSettings(), { 0, 0 });
+		}
+	}
+
 	void mouse_click(MouseButton button, bool up, int32_t x, int32_t y)
 	{
 		auto const browser = safe_browser();
@@ -832,6 +864,13 @@ public:
 
 			if (view_)
 			{
+				// from Masako Toda
+				if (show_devtools_)
+				{
+					view_->show_devtools();
+					show_devtools_ = false;
+				}
+
 				view_->resize(width, height);
 				view_->tick(t);
 			}
