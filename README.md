@@ -8,7 +8,7 @@ A sample application to demonstrate how to use the proposed `OnAcceleratedPaint(
     * VS 2017 Community Edition is fine - just make sure to install C/C++ development tools
 
 2. Download CEF and apply the [pull request][pr158] to create a custom build or download an example binary distribution
-    * Sample distributions support **Chromium 69**
+    * Sample distributions support **Chromium 68**
     * [x64 sample binary distribution][x64_build] (Release build only)
     * [x86 sample binary distribution][x86_build] (Release build only)
     
@@ -158,8 +158,8 @@ A future update could include the following
 [demo2]: https://user-images.githubusercontent.com/2717038/37864824-a02a0648-2f41-11e8-9265-be60ad8bf8a0.png "No VSync"
 [demo3]: https://user-images.githubusercontent.com/2717038/37864648-ea76954c-2f3f-11e8-90d6-4130e56086f4.png "Grid"
 [demo4]: https://user-images.githubusercontent.com/2717038/37930171-9850afe0-3107-11e8-9a24-21e1b1996fa5.png "JSON"
-[x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3489.1813.g9b4bf23_windows64_minimal.7z "x64 Distribution"
-[x86_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3489.1813.g9b4bf23_windows32_minimal.7z "x86 Distribution"
+[x64_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3440.1805.gbe070f9_windows64_minimal.7z "x64 Distribution"
+[x86_build]: https://s3.amazonaws.com/wesselsga/cef/issue_1006/cef_binary_3.3440.1805.gbe070f9_windows32_minimal.7z "x86 Distribution"
 [pr158]: https://bitbucket.org/chromiumembedded/cef/pull-requests/158/support-external-textures-in-osr-mode/diff "Pull Request"
 [changes]: https://github.com/daktronics/cef-mixer/blob/master/CHANGES.md "Walkthrough"
 
