@@ -2,7 +2,7 @@
 
 The patch files in this folder can be used to enable accelerated offscreen rendering to corresponding CEF branches
 
-Following the instructions in the Master Build Quickstart
+Following the instructions in the [Master Build Quickstart][quickstart]
 
 1. Modify the **update.bat** to specify a specific branch.  In this case we'll use 3440 as an example.
 
@@ -24,3 +24,5 @@ git apply shared_textures_3440.patch
 ```
 ninja -C out/Release_GN_x64
 ```
+
+[quickstart]: https://bitbucket.org/chromiumembedded/cef/wiki/MasterBuildQuickStart "Master Build Quickstart"
