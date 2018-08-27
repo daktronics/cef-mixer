@@ -1,0 +1,3035 @@
+diff --git a/include/capi/cef_browser_capi.h b/include/capi/cef_browser_capi.h
+index e8a8d8df..a59b2263 100644
+--- a/include/capi/cef_browser_capi.h
++++ b/include/capi/cef_browser_capi.h
+@@ -33,7 +33,7 @@
+ // by hand. See the translator.README.txt file in the tools directory for
+ // more information.
+ //
+-// $hash=ff3ebc51ed5743aabac0be94caf2edeedbd413b7$
++// $hash=caba7ed3d6e19f7a4499fb48f627c2f5b40e46bc$
+ //
+ 
+ #ifndef CEF_INCLUDE_CAPI_CEF_BROWSER_CAPI_H_
+@@ -571,6 +571,13 @@ typedef struct _cef_browser_host_t {
+   void(CEF_CALLBACK* invalidate)(struct _cef_browser_host_t* self,
+                                  cef_paint_element_type_t type);
+ 
++  ///
++  // Issue a BeginFrame request to Chromium.  Only valid when
++  // cef_window_tInfo::external_begin_frame_enabled is set to true (1).
++  ///
++  void(CEF_CALLBACK* send_external_begin_frame)(
++      struct _cef_browser_host_t* self);
++
+   ///
+   // Send a key event to the browser.
+   ///
+diff --git a/include/capi/cef_render_handler_capi.h b/include/capi/cef_render_handler_capi.h
+index b499aa49..85bf0793 100644
+--- a/include/capi/cef_render_handler_capi.h
++++ b/include/capi/cef_render_handler_capi.h
+@@ -33,7 +33,7 @@
+ // by hand. See the translator.README.txt file in the tools directory for
+ // more information.
+ //
+-// $hash=f2f3acb1df9815e4ac9bf34010ce260a2496ae5a$
++// $hash=a74dd26aa0d4ecd6777fd36c539b5ab6c4ba13cf$
+ //
+ 
+ #ifndef CEF_INCLUDE_CAPI_CEF_RENDER_HANDLER_CAPI_H_
+@@ -141,6 +141,18 @@ typedef struct _cef_render_handler_t {
+                                int width,
+                                int height);
+ 
++  ///
++  // Called when an view has been rendered to the given shared texture handle.
++  // Currently, the shared handle represents a D3D11 Texture2D that can be
++  // accessed with the OpenSharedResource function available from a ID3D11Device
++  ///
++  void(CEF_CALLBACK* on_accelerated_paint)(struct _cef_render_handler_t* self,
++                                           struct _cef_browser_t* browser,
++                                           cef_paint_element_type_t type,
++                                           size_t dirtyRectsCount,
++                                           cef_rect_t const* dirtyRects,
++                                           void* shared_handle);
++
+   ///
+   // Called when the browser's cursor has changed. If |type| is CT_CUSTOM then
+   // |custom_cursor_info| will be populated with the custom cursor information.
+diff --git a/include/cef_browser.h b/include/cef_browser.h
+index 72d9b3ba..8b438e5f 100644
+--- a/include/cef_browser.h
++++ b/include/cef_browser.h
+@@ -595,6 +595,13 @@ class CefBrowserHost : public virtual CefBaseRefCounted {
+   /*--cef()--*/
+   virtual void Invalidate(PaintElementType type) = 0;
+ 
++  ///
++  // Issue a BeginFrame request to Chromium.  Only valid when
++  // CefWindowInfo::external_begin_frame_enabled is set to true.
++  ///
++  /*--cef()--*/
++  virtual void SendExternalBeginFrame() = 0;
++
+   ///
+   // Send a key event to the browser.
+   ///
+diff --git a/include/cef_render_handler.h b/include/cef_render_handler.h
+index 38cb74a1..b52bca24 100644
+--- a/include/cef_render_handler.h
++++ b/include/cef_render_handler.h
+@@ -144,6 +144,17 @@ class CefRenderHandler : public virtual CefBaseRefCounted {
+                        int width,
+                        int height) = 0;
+ 
++  ///
++  // Called when an view has been rendered to the given shared texture handle.
++  // Currently, the shared handle represents a D3D11 Texture2D that can be
++  // accessed with the OpenSharedResource method available from a ID3D11Device
++  ///
++  /*--cef()--*/
++  virtual void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
++                                  PaintElementType type,
++                                  const RectList& dirtyRects,
++                                  void* shared_handle) {}
++
+   ///
+   // Called when the browser's cursor has changed. If |type| is CT_CUSTOM then
+   // |custom_cursor_info| will be populated with the custom cursor information.
+diff --git a/include/internal/cef_linux.h b/include/internal/cef_linux.h
+index ecf74e0f..90577288 100644
+--- a/include/internal/cef_linux.h
++++ b/include/internal/cef_linux.h
+@@ -82,6 +82,8 @@ struct CefWindowInfoTraits {
+     target->height = src->height;
+     target->parent_window = src->parent_window;
+     target->windowless_rendering_enabled = src->windowless_rendering_enabled;
++    target->shared_texture_enabled = src->shared_texture_enabled;
++    target->external_begin_frame_enabled = src->external_begin_frame_enabled;
+     target->window = src->window;
+   }
+ };
+diff --git a/include/internal/cef_mac.h b/include/internal/cef_mac.h
+index 689d88cd..3123fb5a 100644
+--- a/include/internal/cef_mac.h
++++ b/include/internal/cef_mac.h
+@@ -88,6 +88,8 @@ struct CefWindowInfoTraits {
+     target->hidden = src->hidden;
+     target->parent_view = src->parent_view;
+     target->windowless_rendering_enabled = src->windowless_rendering_enabled;
++    target->shared_texture_enabled = src->shared_texture_enabled;
++    target->external_begin_frame_enabled = src->external_begin_frame_enabled;
+     target->view = src->view;
+   }
+ };
+diff --git a/include/internal/cef_types_linux.h b/include/internal/cef_types_linux.h
+index f5e1747e..9566e94f 100644
+--- a/include/internal/cef_types_linux.h
++++ b/include/internal/cef_types_linux.h
+@@ -96,6 +96,19 @@ typedef struct _cef_window_info_t {
+   ///
+   int windowless_rendering_enabled;
+ 
++  ///
++  // Set to true (1) to enable shared textures for off-screen rendering. Only
++  // valid if windowless_rendering_enabled above is set to true.
++  // Currently Windows-only (D3D11)
++  ///
++  int shared_texture_enabled;
++
++  ///
++  // Set to true (1) to enable the ability to issue BeginFrame from the client
++  // application.
++  ///
++  int external_begin_frame_enabled;
++
+   ///
+   // Pointer for the new browser window. Only used with windowed rendering.
+   ///
+diff --git a/include/internal/cef_types_mac.h b/include/internal/cef_types_mac.h
+index 3bd62d0e..eb41b8a0 100644
+--- a/include/internal/cef_types_mac.h
++++ b/include/internal/cef_types_mac.h
+@@ -106,6 +106,19 @@ typedef struct _cef_window_info_t {
+   ///
+   int windowless_rendering_enabled;
+ 
++  ///
++  // Set to true (1) to enable shared textures for off-screen rendering. Only
++  // valid if windowless_rendering_enabled above is set to true.
++  // Currently Windows-only (D3D11)
++  ///
++  int shared_texture_enabled;
++
++  ///
++  // Set to true (1) to enable the ability to issue BeginFrame from the client
++  // application.
++  ///
++  int external_begin_frame_enabled;
++
+   ///
+   // NSView pointer for the new browser view. Only used with windowed rendering.
+   ///
+diff --git a/include/internal/cef_types_win.h b/include/internal/cef_types_win.h
+index 50a2ebfa..2fc20563 100644
+--- a/include/internal/cef_types_win.h
++++ b/include/internal/cef_types_win.h
+@@ -84,6 +84,19 @@ typedef struct _cef_window_info_t {
+   ///
+   int windowless_rendering_enabled;
+ 
++  ///
++  // Set to true (1) to enable shared textures for off-screen rendering. Only
++  // valid if windowless_rendering_enabled above is set to true.
++  // Currently Windows-only (D3D11)
++  ///
++  int shared_texture_enabled;
++
++  ///
++  // Set to true (1) to enable the ability to issue BeginFrame from the client
++  // application.
++  ///
++  int external_begin_frame_enabled;
++
+   ///
+   // Handle for the new browser window. Only used with windowed rendering.
+   ///
+diff --git a/include/internal/cef_win.h b/include/internal/cef_win.h
+index 8b30a4fe..292864e6 100644
+--- a/include/internal/cef_win.h
++++ b/include/internal/cef_win.h
+@@ -88,6 +88,8 @@ struct CefWindowInfoTraits {
+     target->parent_window = src->parent_window;
+     target->menu = src->menu;
+     target->windowless_rendering_enabled = src->windowless_rendering_enabled;
++    target->shared_texture_enabled = src->shared_texture_enabled;
++    target->external_begin_frame_enabled = src->external_begin_frame_enabled;
+     target->window = src->window;
+   }
+ };
+diff --git a/libcef/browser/browser_host_impl.cc b/libcef/browser/browser_host_impl.cc
+index e423c1d1..674166a9 100644
+--- a/libcef/browser/browser_host_impl.cc
++++ b/libcef/browser/browser_host_impl.cc
+@@ -1138,6 +1138,24 @@ void CefBrowserHostImpl::Invalidate(PaintElementType type) {
+   platform_delegate_->Invalidate(type);
+ }
+ 
++void CefBrowserHostImpl::SendExternalBeginFrame() {
++   if (!IsWindowless()) {
++     NOTREACHED() << "Window rendering is not disabled";
++     return;
++   }
++
++   if (!CEF_CURRENTLY_ON_UIT()) {
++     CEF_POST_TASK(
++	    CEF_UIT, base::Bind(&CefBrowserHostImpl::SendExternalBeginFrame, this));
++	 return;
++	}
++
++   if (!web_contents() || !platform_delegate_)
++     return;
++
++    platform_delegate_->SendExternalBeginFrame();
++}
++
+ void CefBrowserHostImpl::SendKeyEvent(const CefKeyEvent& event) {
+   if (!CEF_CURRENTLY_ON_UIT()) {
+     CEF_POST_TASK(CEF_UIT,
+diff --git a/libcef/browser/browser_host_impl.h b/libcef/browser/browser_host_impl.h
+index e9e80fbf..12bf1ef0 100644
+--- a/libcef/browser/browser_host_impl.h
++++ b/libcef/browser/browser_host_impl.h
+@@ -212,6 +212,7 @@ class CefBrowserHostImpl : public CefBrowserHost,
+   void WasHidden(bool hidden) override;
+   void NotifyScreenInfoChanged() override;
+   void Invalidate(PaintElementType type) override;
++  void SendExternalBeginFrame() override;
+   void SendKeyEvent(const CefKeyEvent& event) override;
+   void SendMouseClickEvent(const CefMouseEvent& event,
+                            MouseButtonType type,
+diff --git a/libcef/browser/browser_platform_delegate.cc b/libcef/browser/browser_platform_delegate.cc
+index c247d7d3..48c2870e 100644
+--- a/libcef/browser/browser_platform_delegate.cc
++++ b/libcef/browser/browser_platform_delegate.cc
+@@ -121,6 +121,10 @@ void CefBrowserPlatformDelegate::Invalidate(cef_paint_element_type_t type) {
+   NOTREACHED();
+ }
+ 
++void CefBrowserPlatformDelegate::SendExternalBeginFrame() {
++  NOTREACHED();
++}
++
+ void CefBrowserPlatformDelegate::SetWindowlessFrameRate(int frame_rate) {
+   NOTREACHED();
+ }
+diff --git a/libcef/browser/browser_platform_delegate.h b/libcef/browser/browser_platform_delegate.h
+index b4fb0a17..ffc5548c 100644
+--- a/libcef/browser/browser_platform_delegate.h
++++ b/libcef/browser/browser_platform_delegate.h
+@@ -139,6 +139,9 @@ class CefBrowserPlatformDelegate {
+   // enable transparency.
+   virtual SkColor GetBackgroundColor() const = 0;
+ 
++  virtual bool CanUseSharedTexture() const = 0;
++  virtual bool CanUseExternalBeginFrame() const = 0;
++
+   // Notify the window that it was resized.
+   virtual void SynchronizeVisualProperties() = 0;
+ 
+@@ -227,6 +230,8 @@ class CefBrowserPlatformDelegate {
+   // Invalidate the view. Only used with windowless rendering.
+   virtual void Invalidate(cef_paint_element_type_t type);
+ 
++  virtual void SendExternalBeginFrame();
++
+   // Set the windowless frame rate. Only used with windowless rendering.
+   virtual void SetWindowlessFrameRate(int frame_rate);
+ 
+diff --git a/libcef/browser/browser_platform_delegate_create.cc b/libcef/browser/browser_platform_delegate_create.cc
+index 77c701a9..f90ad2f6 100644
+--- a/libcef/browser/browser_platform_delegate_create.cc
++++ b/libcef/browser/browser_platform_delegate_create.cc
+@@ -34,10 +34,13 @@ namespace {
+ 
+ std::unique_ptr<CefBrowserPlatformDelegateNative> CreateNativeDelegate(
+     const CefWindowInfo& window_info,
+-    SkColor background_color) {
++    SkColor background_color,
++    const bool use_shared_texture,
++    const bool use_external_begin_frame) {
+ #if defined(OS_WIN)
+   return std::make_unique<CefBrowserPlatformDelegateNativeWin>(
+-      window_info, background_color);
++      window_info, background_color, use_shared_texture,
++      use_external_begin_frame);
+ #elif defined(OS_MACOSX)
+   return std::make_unique<CefBrowserPlatformDelegateNativeMac>(
+       window_info, background_color);
+@@ -73,10 +76,22 @@ std::unique_ptr<CefBrowserPlatformDelegate> CefBrowserPlatformDelegate::Create(
+   const SkColor background_color = CefContext::Get()->GetBackgroundColor(
+       &create_params.settings, is_windowless ? STATE_ENABLED : STATE_DISABLED);
+ 
++  bool use_shared_texture = false;
++  bool use_external_begin_frame = false;
++
++  if (is_windowless) {
++    use_shared_texture = create_params.window_info &&
++                         create_params.window_info->shared_texture_enabled;
++
++    use_external_begin_frame =
++        create_params.window_info &&
++        create_params.window_info->external_begin_frame_enabled;
++  }
++
+   if (create_params.window_info) {
+     std::unique_ptr<CefBrowserPlatformDelegateNative> native_delegate =
+-        CreateNativeDelegate(*create_params.window_info.get(),
+-                             background_color);
++        CreateNativeDelegate(*create_params.window_info.get(), background_color,
++                             use_shared_texture, use_external_begin_frame);
+     if (is_windowless)
+       return CreateOSRDelegate(std::move(native_delegate));
+     return std::move(native_delegate);
+@@ -84,7 +99,8 @@ std::unique_ptr<CefBrowserPlatformDelegate> CefBrowserPlatformDelegate::Create(
+              extensions::VIEW_TYPE_EXTENSION_BACKGROUND_PAGE) {
+     // Creating a background extension host without a window.
+     std::unique_ptr<CefBrowserPlatformDelegateNative> native_delegate =
+-        CreateNativeDelegate(CefWindowInfo(), background_color);
++        CreateNativeDelegate(CefWindowInfo(), background_color,
++                             use_shared_texture, use_external_begin_frame);
+     return std::make_unique<CefBrowserPlatformDelegateBackground>(
+         std::move(native_delegate));
+   }
+@@ -92,7 +108,8 @@ std::unique_ptr<CefBrowserPlatformDelegate> CefBrowserPlatformDelegate::Create(
+   else {
+     // CefWindowInfo is not used in this case.
+     std::unique_ptr<CefBrowserPlatformDelegateNative> native_delegate =
+-        CreateNativeDelegate(CefWindowInfo(), background_color);
++        CreateNativeDelegate(CefWindowInfo(), background_color,
++                             use_shared_texture, use_external_begin_frame);
+     return std::make_unique<CefBrowserPlatformDelegateViews>(
+         std::move(native_delegate),
+         static_cast<CefBrowserViewImpl*>(create_params.browser_view.get()));
+diff --git a/libcef/browser/extensions/browser_platform_delegate_background.cc b/libcef/browser/extensions/browser_platform_delegate_background.cc
+index ab28a5a1..f0c97529 100644
+--- a/libcef/browser/extensions/browser_platform_delegate_background.cc
++++ b/libcef/browser/extensions/browser_platform_delegate_background.cc
+@@ -35,6 +35,14 @@ CefWindowHandle CefBrowserPlatformDelegateBackground::GetHostWindowHandle()
+   return kNullWindowHandle;
+ }
+ 
++bool CefBrowserPlatformDelegateBackground::CanUseSharedTexture() const {
++  return native_delegate_->CanUseSharedTexture();
++}
++
++bool CefBrowserPlatformDelegateBackground::CanUseExternalBeginFrame() const {
++  return native_delegate_->CanUseExternalBeginFrame();
++}
++
+ SkColor CefBrowserPlatformDelegateBackground::GetBackgroundColor() const {
+   return native_delegate_->GetBackgroundColor();
+ }
+diff --git a/libcef/browser/extensions/browser_platform_delegate_background.h b/libcef/browser/extensions/browser_platform_delegate_background.h
+index 52dad613..9607bf02 100644
+--- a/libcef/browser/extensions/browser_platform_delegate_background.h
++++ b/libcef/browser/extensions/browser_platform_delegate_background.h
+@@ -22,6 +22,8 @@ class CefBrowserPlatformDelegateBackground
+   void CloseHostWindow() override;
+   CefWindowHandle GetHostWindowHandle() const override;
+   SkColor GetBackgroundColor() const override;
++  bool CanUseSharedTexture() const override;
++  bool CanUseExternalBeginFrame() const override;
+   void SynchronizeVisualProperties() override;
+   void SendKeyEvent(const content::NativeWebKeyboardEvent& event) override;
+   void SendMouseEvent(const blink::WebMouseEvent& event) override;
+diff --git a/libcef/browser/extensions/mime_handler_view_guest_delegate.cc b/libcef/browser/extensions/mime_handler_view_guest_delegate.cc
+index 34cb6f36..4dbfb27e 100644
+--- a/libcef/browser/extensions/mime_handler_view_guest_delegate.cc
++++ b/libcef/browser/extensions/mime_handler_view_guest_delegate.cc
+@@ -42,8 +42,8 @@ void CefMimeHandlerViewGuestDelegate::OverrideWebContentsCreateParams(
+ 
+   CefRefPtr<CefBrowserHostImpl> owner_browser = GetOwnerBrowser(guest_);
+   if (owner_browser->IsWindowless()) {
+-    CefWebContentsViewOSR* view_osr =
+-        new CefWebContentsViewOSR(owner_browser->GetBackgroundColor());
++    CefWebContentsViewOSR* view_osr = new CefWebContentsViewOSR(
++        owner_browser->GetBackgroundColor(), false, false);
+     params->view = view_osr;
+     params->delegate_view = view_osr;
+   }
+diff --git a/libcef/browser/native/browser_platform_delegate_native.cc b/libcef/browser/native/browser_platform_delegate_native.cc
+index dc0b6999..c470cd58 100644
+--- a/libcef/browser/native/browser_platform_delegate_native.cc
++++ b/libcef/browser/native/browser_platform_delegate_native.cc
+@@ -11,15 +11,27 @@
+ 
+ CefBrowserPlatformDelegateNative::CefBrowserPlatformDelegateNative(
+     const CefWindowInfo& window_info,
+-    SkColor background_color)
++    SkColor background_color,
++    const bool use_shared_texture,
++    const bool use_external_begin_frame)
+     : window_info_(window_info),
+       background_color_(background_color),
++      use_shared_texture_(use_shared_texture),
++      use_external_begin_frame_(use_external_begin_frame),
+       windowless_handler_(nullptr) {}
+ 
+ SkColor CefBrowserPlatformDelegateNative::GetBackgroundColor() const {
+   return background_color_;
+ }
+ 
++bool CefBrowserPlatformDelegateNative::CanUseSharedTexture() const {
++  return use_shared_texture_;
++}
++
++bool CefBrowserPlatformDelegateNative::CanUseExternalBeginFrame() const {
++  return use_external_begin_frame_;
++}
++
+ void CefBrowserPlatformDelegateNative::SynchronizeVisualProperties() {
+   content::RenderViewHost* host = browser_->web_contents()->GetRenderViewHost();
+   if (host)
+diff --git a/libcef/browser/native/browser_platform_delegate_native.h b/libcef/browser/native/browser_platform_delegate_native.h
+index 2fb2f888..1744b71b 100644
+--- a/libcef/browser/native/browser_platform_delegate_native.h
++++ b/libcef/browser/native/browser_platform_delegate_native.h
+@@ -25,6 +25,8 @@ class CefBrowserPlatformDelegateNative : public CefBrowserPlatformDelegate {
+   };
+ 
+   // CefBrowserPlatformDelegate methods:
++  bool CanUseSharedTexture() const override;
++  bool CanUseExternalBeginFrame() const override;
+   SkColor GetBackgroundColor() const override;
+   void SynchronizeVisualProperties() override;
+   void SendKeyEvent(const content::NativeWebKeyboardEvent& event) override;
+@@ -41,10 +43,14 @@ class CefBrowserPlatformDelegateNative : public CefBrowserPlatformDelegate {
+ 
+  protected:
+   CefBrowserPlatformDelegateNative(const CefWindowInfo& window_info,
+-                                   SkColor background_color);
++                                   SkColor background_color,
++                                   const bool use_shared_texture = false,
++                                   const bool use_external_begin_frame = false);
+ 
+   CefWindowInfo window_info_;
+   const SkColor background_color_;
++  const bool use_shared_texture_;
++  const bool use_external_begin_frame_;
+ 
+   WindowlessHandler* windowless_handler_;  // Not owned by this object.
+ };
+diff --git a/libcef/browser/native/browser_platform_delegate_native_win.cc b/libcef/browser/native/browser_platform_delegate_native_win.cc
+index 22883a85..e58c48a1 100644
+--- a/libcef/browser/native/browser_platform_delegate_native_win.cc
++++ b/libcef/browser/native/browser_platform_delegate_native_win.cc
+@@ -125,8 +125,13 @@ float GetWindowScaleFactor(HWND hwnd) {
+ 
+ CefBrowserPlatformDelegateNativeWin::CefBrowserPlatformDelegateNativeWin(
+     const CefWindowInfo& window_info,
+-    SkColor background_color)
+-    : CefBrowserPlatformDelegateNative(window_info, background_color),
++    SkColor background_color,
++    const bool use_shared_texture,
++    const bool use_external_begin_frame)
++    : CefBrowserPlatformDelegateNative(window_info,
++                                       background_color,
++                                       use_shared_texture,
++                                       use_external_begin_frame),
+       host_window_created_(false),
+       window_widget_(nullptr) {}
+ 
+diff --git a/libcef/browser/native/browser_platform_delegate_native_win.h b/libcef/browser/native/browser_platform_delegate_native_win.h
+index b59d8748..57f1b1ca 100644
+--- a/libcef/browser/native/browser_platform_delegate_native_win.h
++++ b/libcef/browser/native/browser_platform_delegate_native_win.h
+@@ -14,7 +14,9 @@ class CefBrowserPlatformDelegateNativeWin
+     : public CefBrowserPlatformDelegateNative {
+  public:
+   CefBrowserPlatformDelegateNativeWin(const CefWindowInfo& window_info,
+-                                      SkColor background_color);
++                                      SkColor background_color,
++                                      const bool use_shared_texture,
++                                      const bool use_external_begin_frame);
+ 
+   // CefBrowserPlatformDelegate methods:
+   void BrowserDestroyed(CefBrowserHostImpl* browser) override;
+diff --git a/libcef/browser/osr/browser_platform_delegate_osr.cc b/libcef/browser/osr/browser_platform_delegate_osr.cc
+index 470c5ee2..feff3e17 100644
+--- a/libcef/browser/osr/browser_platform_delegate_osr.cc
++++ b/libcef/browser/osr/browser_platform_delegate_osr.cc
+@@ -30,7 +30,8 @@ void CefBrowserPlatformDelegateOsr::CreateViewForWebContents(
+   DCHECK(!view_osr_);
+ 
+   // Use the OSR view instead of the default platform view.
+-  view_osr_ = new CefWebContentsViewOSR(GetBackgroundColor());
++  view_osr_ = new CefWebContentsViewOSR(
++      GetBackgroundColor(), CanUseSharedTexture(), CanUseExternalBeginFrame());
+   *view = view_osr_;
+   *delegate_view = view_osr_;
+ }
+@@ -69,6 +70,14 @@ void CefBrowserPlatformDelegateOsr::BrowserDestroyed(
+   view_osr_ = nullptr;
+ }
+ 
++bool CefBrowserPlatformDelegateOsr::CanUseSharedTexture() const {
++  return native_delegate_->CanUseSharedTexture();
++}
++
++bool CefBrowserPlatformDelegateOsr::CanUseExternalBeginFrame() const {
++  return native_delegate_->CanUseExternalBeginFrame();
++}
++
+ SkColor CefBrowserPlatformDelegateOsr::GetBackgroundColor() const {
+   return native_delegate_->GetBackgroundColor();
+ }
+@@ -223,6 +232,12 @@ void CefBrowserPlatformDelegateOsr::Invalidate(cef_paint_element_type_t type) {
+     view->Invalidate(type);
+ }
+ 
++void CefBrowserPlatformDelegateOsr::SendExternalBeginFrame() {
++  CefRenderWidgetHostViewOSR* view = GetOSRHostView();
++  if (view)
++    view->SendExternalBeginFrame();
++}
++
+ void CefBrowserPlatformDelegateOsr::SetWindowlessFrameRate(int frame_rate) {
+   CefRenderWidgetHostViewOSR* view = GetOSRHostView();
+   if (view)
+diff --git a/libcef/browser/osr/browser_platform_delegate_osr.h b/libcef/browser/osr/browser_platform_delegate_osr.h
+index 47b5d422..4620452f 100644
+--- a/libcef/browser/osr/browser_platform_delegate_osr.h
++++ b/libcef/browser/osr/browser_platform_delegate_osr.h
+@@ -28,7 +28,10 @@ class CefBrowserPlatformDelegateOsr
+   void BrowserCreated(CefBrowserHostImpl* browser) override;
+   void BrowserDestroyed(CefBrowserHostImpl* browser) override;
+   SkColor GetBackgroundColor() const override;
++  bool CanUseSharedTexture() const override;
++  bool CanUseExternalBeginFrame() const override;
+   void SynchronizeVisualProperties() override;
++  void SendExternalBeginFrame() override;
+   void SendKeyEvent(const content::NativeWebKeyboardEvent& event) override;
+   void SendMouseEvent(const blink::WebMouseEvent& event) override;
+   void SendMouseWheelEvent(const blink::WebMouseWheelEvent& event) override;
+diff --git a/libcef/browser/osr/render_widget_host_view_osr.cc b/libcef/browser/osr/render_widget_host_view_osr.cc
+index bb0ddbbb..a165552e 100644
+--- a/libcef/browser/osr/render_widget_host_view_osr.cc
++++ b/libcef/browser/osr/render_widget_host_view_osr.cc
+@@ -201,8 +201,66 @@ class CefBeginFrameTimer : public viz::DelayBasedTimeSourceClient {
+   DISALLOW_COPY_AND_ASSIGN(CefBeginFrameTimer);
+ };
+ 
++class CefCompositorFrameSinkClient
++    : public viz::mojom::CompositorFrameSinkClient {
++ public:
++  CefCompositorFrameSinkClient(viz::mojom::CompositorFrameSinkClient* forward,
++                               CefRenderWidgetHostViewOSR* rwhv)
++      : forward_(forward), render_widget_host_view_(rwhv) {}
++
++  void DidReceiveCompositorFrameAck(
++      const std::vector<viz::ReturnedResource>& resources) override {
++    forward_->DidReceiveCompositorFrameAck(resources);
++  }
++
++  void DidPresentCompositorFrame(uint32_t presentation_token,
++                                 base::TimeTicks time,
++                                 base::TimeDelta refresh,
++                                 uint32_t flags) override
++
++  {
++	forward_->DidPresentCompositorFrame(presentation_token, time, refresh, flags);
++    if (render_widget_host_view_) {
++      render_widget_host_view_->OnPresentCompositorFrame();
++    }
++  }
++
++  void DidDiscardCompositorFrame(uint32_t presentation_token) override
++  {
++	  forward_->DidDiscardCompositorFrame(presentation_token);
++	  if (render_widget_host_view_) {
++		  render_widget_host_view_->OnPresentCompositorFrame();
++	  }
++  }
++
++  /*void DidPresentCompositorFrame(
++      uint32_t presentation_token,
++      const gfx::PresentationFeedback& feedback) override {
++    forward_->DidPresentCompositorFrame(presentation_token, feedback);
++    if (render_widget_host_view_) {
++      render_widget_host_view_->OnPresentCompositorFrame();
++    }
++  }*/
++  void OnBeginFrame(const viz::BeginFrameArgs& args) override {
++    forward_->OnBeginFrame(args);
++  }
++  void OnBeginFramePausedChanged(bool paused) override {
++    forward_->OnBeginFramePausedChanged(paused);
++  }
++  void ReclaimResources(
++      const std::vector<viz::ReturnedResource>& resources) override {
++    forward_->ReclaimResources(resources);
++  }
++
++ private:
++  viz::mojom::CompositorFrameSinkClient* const forward_;
++  CefRenderWidgetHostViewOSR* const render_widget_host_view_;
++};
++
+ CefRenderWidgetHostViewOSR::CefRenderWidgetHostViewOSR(
+     SkColor background_color,
++    bool use_shared_texture,
++    bool use_external_begin_frame,
+     content::RenderWidgetHost* widget,
+     CefRenderWidgetHostViewOSR* parent_host_view,
+     bool is_guest_view_hack)
+@@ -256,6 +314,8 @@ CefRenderWidgetHostViewOSR::CefRenderWidgetHostViewOSR(
+   GetRootLayer()->SetFillsBoundsOpaquely(opaque);
+   GetRootLayer()->SetColor(background_color_);
+ 
++  external_begin_frame_enabled_ = use_external_begin_frame;
++
+ #if !defined(OS_MACOSX)
+   // On macOS the ui::Compositor is created/owned by the platform view.
+   content::ImageTransportFactory* factory =
+@@ -263,13 +323,22 @@ CefRenderWidgetHostViewOSR::CefRenderWidgetHostViewOSR(
+   ui::ContextFactoryPrivate* context_factory_private =
+       factory->GetContextFactoryPrivate();
+   // Matching the attributes from RecyclableCompositorMac.
+-  compositor_.reset(
+-      new ui::Compositor(context_factory_private->AllocateFrameSinkId(),
+-                         content::GetContextFactory(), context_factory_private,
+-                         base::ThreadTaskRunnerHandle::Get(),
+-                         features::IsSurfaceSynchronizationEnabled(),
+-                         false /* enable_pixel_canvas */));
++  compositor_.reset(new ui::Compositor(
++      context_factory_private->AllocateFrameSinkId(),
++      content::GetContextFactory(), context_factory_private,
++      base::ThreadTaskRunnerHandle::Get(),
++      features::IsSurfaceSynchronizationEnabled(),
++      false /* enable_pixel_canvas */, use_external_begin_frame));
+   compositor_->SetAcceleratedWidget(compositor_widget_);
++
++  // tell the compositor to use shared textures if the
++  // client can handle OnAcceleratedPaint
++  compositor_->EnableSharedTexture(use_shared_texture);
++
++  if (use_external_begin_frame) {
++    compositor_->SetExternalBeginFrameClient(this);
++  }
++
+   compositor_->SetDelegate(this);
+   compositor_->SetRootLayer(root_layer_.get());
+ #endif
+@@ -286,6 +355,13 @@ CefRenderWidgetHostViewOSR::~CefRenderWidgetHostViewOSR() {
+   if (is_showing_)
+     browser_compositor_->SetRenderWidgetHostIsHidden(true);
+ #else
++  if (external_begin_frame_enabled_) {
++    ui::Compositor* compositor = GetCompositor();
++    if (compositor) {
++      compositor->SetExternalBeginFrameClient(nullptr);
++    }
++  }
++
+   // Marking the DelegatedFrameHost as removed from the window hierarchy is
+   // necessary to remove all connections to its old ui::Compositor.
+   if (is_showing_)
+@@ -461,10 +537,34 @@ void CefRenderWidgetHostViewOSR::TakeFallbackContentFrom(
+ 
+ void CefRenderWidgetHostViewOSR::DidCreateNewRendererCompositorFrameSink(
+     viz::mojom::CompositorFrameSinkClient* renderer_compositor_frame_sink) {
+-  renderer_compositor_frame_sink_ = renderer_compositor_frame_sink;
++  renderer_compositor_frame_sink_.reset(
++      new CefCompositorFrameSinkClient(renderer_compositor_frame_sink, this));
+   if (GetDelegatedFrameHost()) {
+     GetDelegatedFrameHost()->DidCreateNewRendererCompositorFrameSink(
+-        renderer_compositor_frame_sink_);
++        renderer_compositor_frame_sink_.get());
++  }
++}
++
++void CefRenderWidgetHostViewOSR::OnPresentCompositorFrame() {
++  // is Chromium rendering to a shared texture?
++  void* shared_texture = nullptr;
++  ui::Compositor* compositor = GetCompositor();
++  if (compositor) {
++    shared_texture = compositor->GetSharedTexture();
++  }
++
++  if (shared_texture) {
++    CefRefPtr<CefRenderHandler> handler =
++        browser_impl_->GetClient()->GetRenderHandler();
++    if (handler.get()) {
++      CefRenderHandler::RectList rcList;
++      rcList.push_back(CefRect(damage_rect_.x(), damage_rect_.y(),
++                               damage_rect_.width(), damage_rect_.height()));
++
++      handler->OnAcceleratedPaint(browser_impl_.get(),
++                                  IsPopupWidget() ? PET_POPUP : PET_VIEW,
++                                  rcList, shared_texture);
++    }
+   }
+ }
+ 
+@@ -474,6 +574,17 @@ void CefRenderWidgetHostViewOSR::SubmitCompositorFrame(
+     base::Optional<viz::HitTestRegionList> hit_test_region_list) {
+   TRACE_EVENT0("libcef", "CefRenderWidgetHostViewOSR::OnSwapCompositorFrame");
+ 
++  // Update the frame rate ... at this point we should have a valid connection
++  // back to the Synthetic Frame Source ... which is important so we can
++  // actually modify the frame rate to something other than the default of 60Hz
++  if (sync_frame_rate_) {
++    if (frame_rate_threshold_us_ != 0) {
++      GetCompositor()->SetAuthoritativeVSyncInterval(
++          base::TimeDelta::FromMicroseconds(frame_rate_threshold_us_));
++    }
++    sync_frame_rate_ = false;
++  }
++
+   if (frame.metadata.root_scroll_offset != last_scroll_offset_) {
+     last_scroll_offset_ = frame.metadata.root_scroll_offset;
+ 
+@@ -503,31 +614,49 @@ void CefRenderWidgetHostViewOSR::SubmitCompositorFrame(
+       GetDelegatedFrameHost()->SubmitCompositorFrame(
+           local_surface_id, std::move(frame), std::move(hit_test_region_list));
+     } else {
+-      if (!copy_frame_generator_.get()) {
+-        copy_frame_generator_.reset(
+-            new CefCopyFrameGenerator(frame_rate_threshold_us_, this));
+-      }
+-
+-      // Determine the damage rectangle for the current frame. This is the same
+-      // calculation that SwapDelegatedFrame uses.
+-      viz::RenderPass* root_pass = frame.render_pass_list.back().get();
+-      gfx::Size frame_size = root_pass->output_rect.size();
+-      gfx::Rect damage_rect =
+-          gfx::ToEnclosingRect(gfx::RectF(root_pass->damage_rect));
+-      damage_rect.Intersect(gfx::Rect(frame_size));
+-
+-      // We would normally call BrowserCompositorMac::SubmitCompositorFrame on
+-      // macOS, however it contains compositor resize logic that we don't want.
+-      // Consequently we instead call the SwapDelegatedFrame method directly.
+-      GetDelegatedFrameHost()->SubmitCompositorFrame(
+-          local_surface_id, std::move(frame), std::move(hit_test_region_list));
++      void* shared_texture = nullptr;
++      ui::Compositor* compositor = GetCompositor();
++      if (compositor) {
++        shared_texture = compositor->GetSharedTexture();
++
++        // Determine the damage rectangle for the current frame. This is the
++        // same calculation that SwapDelegatedFrame uses.
++        viz::RenderPass* root_pass = frame.render_pass_list.back().get();
++        gfx::Size frame_size = root_pass->output_rect.size();
++        damage_rect_ = gfx::ToEnclosingRect(gfx::RectF(root_pass->damage_rect));
++        damage_rect_.Intersect(gfx::Rect(frame_size));
++
++        // using a shared texture, flag that we want feedback every frame
++        if (shared_texture) {
++
++			  if (!++presentation_token_)
++				  ++presentation_token_;
++			  frame.metadata.presentation_token = presentation_token_;
++
++          //frame.metadata.request_presentation_feedback = true;
++        }
+ 
+-      // Request a copy of the last compositor frame which will eventually call
+-      // OnPaint asynchronously.
+-      copy_frame_generator_->GenerateCopyFrame(damage_rect);
++        // We would normally call BrowserCompositorMac::SubmitCompositorFrame on
++        // macOS, however it contains compositor resize logic that we don't
++        // want. Consequently we instead call the SwapDelegatedFrame method
++        // directly.
++        GetDelegatedFrameHost()->SubmitCompositorFrame(
++            local_surface_id, std::move(frame),
++            std::move(hit_test_region_list));
++
++        // Only issue a copy frame request if we're not using shared textures
++        if (!shared_texture) {
++          if (!copy_frame_generator_.get()) {
++            copy_frame_generator_.reset(
++                new CefCopyFrameGenerator(frame_rate_threshold_us_, this));
++          }
++
++          // Request a copy of the last compositor frame which will eventually
++          // call OnPaint asynchronously.
++          copy_frame_generator_->GenerateCopyFrame(damage_rect_);
++        }
++      }
+     }
+-
+-    return;
+   }
+ }
+ 
+@@ -716,7 +845,8 @@ void CefRenderWidgetHostViewOSR::GetScreenInfo(
+        screen_info.available_rect.width == 0 ||
+        screen_info.available_rect.height == 0)) {
+     // If a screen rectangle was not provided, try using the view rectangle
+-    // instead. Otherwise, popup views may be drawn incorrectly, or not at all.
++    // instead. Otherwise, popup views may be drawn incorrectly, or not at
++    // all.
+     CefRect screenRect;
+     if (!handler->GetViewRect(browser_impl_.get(), screenRect)) {
+       NOTREACHED();
+@@ -871,8 +1001,12 @@ viz::FrameSinkId CefRenderWidgetHostViewOSR::GetFrameSinkId() {
+ void CefRenderWidgetHostViewOSR::SetNeedsBeginFrames(bool enabled) {
+   SetFrameRate();
+ 
+-  // Start/stop the timer that sends BeginFrame requests.
+-  begin_frame_timer_->SetActive(enabled);
++  // Only use the timer if not using external BeginFrame
++  if (!external_begin_frame_enabled_) {
++    // Start/stop the timer that sends BeginFrame requests.
++    begin_frame_timer_->SetActive(enabled);
++  }
++
+   if (software_output_device_) {
+     // When the SoftwareOutputDevice is active it will call OnPaint for each
+     // frame. If the SoftwareOutputDevice is deactivated while an invalidation
+@@ -915,9 +1049,9 @@ bool CefRenderWidgetHostViewOSR::TransformPointToCoordSpaceForView(
+     return true;
+   }
+ 
+-  // In TransformPointToLocalCoordSpace() there is a Point-to-Pixel conversion,
+-  // but it is not necessary here because the final target view is responsible
+-  // for converting before computing the final transform.
++  // In TransformPointToLocalCoordSpace() there is a Point-to-Pixel
++  // conversion, but it is not necessary here because the final target view is
++  // responsible for converting before computing the final transform.
+   return GetDelegatedFrameHost()->TransformPointToCoordSpaceForView(
+       point, target_view, transformed_point, source);
+ }
+@@ -934,6 +1068,16 @@ void CefRenderWidgetHostViewOSR::DidNavigate() {
+ #endif
+ }
+ 
++void CefRenderWidgetHostViewOSR::OnDisplayDidFinishFrame(
++    const viz::BeginFrameAck& /*ack*/) {
++  // TODO: is there something we need to track with this notification?
++}
++
++void CefRenderWidgetHostViewOSR::OnNeedsExternalBeginFrames(
++    bool needs_begin_frames) {
++  needs_external_begin_frames_ = needs_begin_frames;
++}
++
+ std::unique_ptr<viz::SoftwareOutputDevice>
+ CefRenderWidgetHostViewOSR::CreateSoftwareOutputDevice(
+     ui::Compositor* compositor) {
+@@ -1034,8 +1178,8 @@ void CefRenderWidgetHostViewOSR::OnScreenInfoChanged() {
+ #endif
+ 
+   // We might want to change the cursor scale factor here as well - see the
+-  // cache for the current_cursor_, as passed by UpdateCursor from the renderer
+-  // in the rwhv_aura (current_cursor_.SetScaleFactor)
++  // cache for the current_cursor_, as passed by UpdateCursor from the
++  // renderer in the rwhv_aura (current_cursor_.SetScaleFactor)
+ 
+   // Notify the guest hosts if any.
+   for (auto guest_host_view : guest_host_views_)
+@@ -1055,6 +1199,31 @@ void CefRenderWidgetHostViewOSR::Invalidate(
+   InvalidateInternal(gfx::Rect(GetCompositorViewportPixelSize()));
+ }
+ 
++void CefRenderWidgetHostViewOSR::SendExternalBeginFrame() {
++  DCHECK(external_begin_frame_enabled_);
++
++  base::TimeTicks frame_time = base::TimeTicks::Now();
++  base::TimeTicks deadline = base::TimeTicks();
++  base::TimeDelta interval = viz::BeginFrameArgs::DefaultInterval();
++
++  viz::BeginFrameArgs begin_frame_args = viz::BeginFrameArgs::Create(
++      BEGINFRAME_FROM_HERE, begin_frame_source_.source_id(),
++      begin_frame_number_, frame_time, deadline, interval,
++      viz::BeginFrameArgs::NORMAL);
++
++  DCHECK(begin_frame_args.IsValid());
++  begin_frame_number_++;
++
++  if (renderer_compositor_frame_sink_) {
++    GetCompositor()->IssueExternalBeginFrame(begin_frame_args);
++    renderer_compositor_frame_sink_->OnBeginFrame(begin_frame_args);
++  }
++
++  if (!IsPopupWidget() && popup_host_view_) {
++    popup_host_view_->SendExternalBeginFrame();
++  }
++}
++
+ void CefRenderWidgetHostViewOSR::SendKeyEvent(
+     const content::NativeWebKeyboardEvent& event) {
+   TRACE_EVENT0("libcef", "CefRenderWidgetHostViewOSR::SendKeyEvent");
+@@ -1143,8 +1312,8 @@ void CefRenderWidgetHostViewOSR::SendMouseWheelEvent(
+         return;
+       } else {
+         // Scrolling outside of the popup widget so destroy it.
+-        // Execute asynchronously to avoid deleting the widget from inside some
+-        // other callback.
++        // Execute asynchronously to avoid deleting the widget from inside
++        // some other callback.
+         CEF_POST_TASK(
+             CEF_UIT,
+             base::Bind(&CefRenderWidgetHostViewOSR::CancelWidget,
+@@ -1286,8 +1455,20 @@ void CefRenderWidgetHostViewOSR::SetFrameRate() {
+   if (frame_rate_threshold_us_ != 0)
+     return;
+ 
+-  const int frame_rate =
+-      osr_util::ClampFrameRate(browser->settings().windowless_frame_rate);
++  int frame_rate;
++  if (GetCompositor()->shared_texture_enabled()) {
++    // no upper-bound when using OnAcceleratedPaint
++    frame_rate = browser->settings().windowless_frame_rate;
++    if (frame_rate <= 0) {
++      frame_rate = 1;
++    }
++    sync_frame_rate_ = true;
++
++  } else {
++    frame_rate =
++        +osr_util::ClampFrameRate(browser->settings().windowless_frame_rate);
++  }
++
+   frame_rate_threshold_us_ = 1000000 / frame_rate;
+ 
+   if (GetCompositor()) {
+@@ -1447,8 +1628,8 @@ void CefRenderWidgetHostViewOSR::CancelWidget() {
+   if (render_widget_host_ && !is_destroyed_) {
+     is_destroyed_ = true;
+ 
+-    // Don't delete the RWHI manually while owned by a scoped_ptr in RVHI. This
+-    // matches a CHECK() in RenderWidgetHostImpl::Destroy().
++    // Don't delete the RWHI manually while owned by a scoped_ptr in RVHI.
++    // This matches a CHECK() in RenderWidgetHostImpl::Destroy().
+     const bool also_delete = !render_widget_host_->owner_delegate();
+ 
+     // Results in a call to Destroy().
+diff --git a/libcef/browser/osr/render_widget_host_view_osr.h b/libcef/browser/osr/render_widget_host_view_osr.h
+index a4c466d5..60885c69 100644
+--- a/libcef/browser/osr/render_widget_host_view_osr.h
++++ b/libcef/browser/osr/render_widget_host_view_osr.h
+@@ -20,6 +20,8 @@
+ #include "content/browser/renderer_host/delegated_frame_host.h"
+ #include "content/browser/renderer_host/render_widget_host_view_base.h"
+ #include "ui/compositor/compositor.h"
++#include "ui/compositor/external_begin_frame_client.h"
++#include "ui/gfx/geometry/rect.h"
+ 
+ #if defined(OS_LINUX)
+ #include "ui/base/x/x11_util.h"
+@@ -83,6 +85,7 @@ class MacHelper;
+ #endif
+ 
+ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
++                                   public ui::ExternalBeginFrameClient,
+                                    public ui::CompositorDelegate
+ #if !defined(OS_MACOSX)
+     ,
+@@ -91,6 +94,8 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+ {
+  public:
+   CefRenderWidgetHostViewOSR(SkColor background_color,
++                             bool use_shared_texture,
++                             bool use_external_begin_frame,
+                              content::RenderWidgetHost* widget,
+                              CefRenderWidgetHostViewOSR* parent_host_view,
+                              bool is_guest_view_hack);
+@@ -190,6 +195,10 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+   viz::LocalSurfaceId GetLocalSurfaceId() const override;
+   viz::FrameSinkId GetFrameSinkId() override;
+ 
++  // ui::ExternalBeginFrameClient implementation:
++  void OnDisplayDidFinishFrame(const viz::BeginFrameAck& ack) override;
++  void OnNeedsExternalBeginFrames(bool needs_begin_frames) override;
++
+   // ui::CompositorDelegate implementation.
+   std::unique_ptr<viz::SoftwareOutputDevice> CreateSoftwareOutputDevice(
+       ui::Compositor* compositor) override;
+@@ -210,6 +219,7 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+   void SynchronizeVisualProperties();
+   void OnScreenInfoChanged();
+   void Invalidate(CefBrowserHost::PaintElementType type);
++  void SendExternalBeginFrame();
+   void SendKeyEvent(const content::NativeWebKeyboardEvent& event);
+   void SendMouseEvent(const blink::WebMouseEvent& event);
+   void SendMouseWheelEvent(const blink::WebMouseWheelEvent& event);
+@@ -254,6 +264,8 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+   }
+   ui::Layer* GetRootLayer() const;
+ 
++  void OnPresentCompositorFrame();
++
+  private:
+   content::DelegatedFrameHost* GetDelegatedFrameHost() const;
+ 
+@@ -310,6 +322,8 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+ 
+   int frame_rate_threshold_us_;
+ 
++  gfx::Rect damage_rect_;
++
+ #if !defined(OS_MACOSX)
+   std::unique_ptr<ui::Compositor> compositor_;
+   gfx::AcceleratedWidget compositor_widget_;
+@@ -339,6 +353,10 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+   viz::StubBeginFrameSource begin_frame_source_;
+   uint64_t begin_frame_number_ = viz::BeginFrameArgs::kStartingFrameNumber;
+ 
++  bool sync_frame_rate_ = false;
++  bool external_begin_frame_enabled_ = false;
++  bool needs_external_begin_frames_ = false;
++
+   // Used for direct rendering from the compositor when GPU compositing is
+   // disabled. This object is owned by the compositor.
+   CefSoftwareOutputDeviceOSR* software_output_device_;
+@@ -366,12 +384,13 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+   bool is_destroyed_;
+   gfx::Rect popup_position_;
+ 
++  uint32_t presentation_token_ = 0;
++
+   // The last scroll offset of the view.
+   gfx::Vector2dF last_scroll_offset_;
+   bool is_scroll_offset_changed_pending_;
+ 
+-  viz::mojom::CompositorFrameSinkClient* renderer_compositor_frame_sink_ =
+-      nullptr;
++  std::unique_ptr<viz::mojom::CompositorFrameSinkClient> renderer_compositor_frame_sink_;
+ 
+   // Latest capture sequence number which is incremented when the caller
+   // requests surfaces be synchronized via
+diff --git a/libcef/browser/osr/web_contents_view_osr.cc b/libcef/browser/osr/web_contents_view_osr.cc
+index 804ea373..168452e3 100644
+--- a/libcef/browser/osr/web_contents_view_osr.cc
++++ b/libcef/browser/osr/web_contents_view_osr.cc
+@@ -15,8 +15,13 @@
+ #include "content/browser/web_contents/web_contents_impl.h"
+ #include "content/public/browser/render_widget_host.h"
+ 
+-CefWebContentsViewOSR::CefWebContentsViewOSR(SkColor background_color)
+-    : background_color_(background_color), web_contents_(NULL) {}
++CefWebContentsViewOSR::CefWebContentsViewOSR(SkColor background_color,
++                                             bool use_shared_texture,
++                                             bool use_external_begin_frame)
++    : background_color_(background_color),
++      use_shared_texture_(use_shared_texture),
++      use_external_begin_frame_(use_external_begin_frame),
++      web_contents_(NULL) {}
+ 
+ CefWebContentsViewOSR::~CefWebContentsViewOSR() {}
+ 
+@@ -109,8 +114,9 @@ content::RenderWidgetHostViewBase* CefWebContentsViewOSR::CreateViewForWidget(
+   }
+ 
+   const bool is_guest_view_hack = !!embedder_render_widget_host;
+-  return new CefRenderWidgetHostViewOSR(background_color_, render_widget_host,
+-                                        embedder_host_view, is_guest_view_hack);
++  return new CefRenderWidgetHostViewOSR(
++      background_color_, use_shared_texture_, use_external_begin_frame_,
++      render_widget_host, embedder_host_view, is_guest_view_hack);
+ }
+ 
+ // Called for popup and fullscreen widgets.
+@@ -120,8 +126,9 @@ CefWebContentsViewOSR::CreateViewForPopupWidget(
+   CefRenderWidgetHostViewOSR* view = GetView();
+   CHECK(view);
+ 
+-  return new CefRenderWidgetHostViewOSR(background_color_, render_widget_host,
+-                                        view, false);
++  return new CefRenderWidgetHostViewOSR(background_color_, use_shared_texture_,
++                                        use_external_begin_frame_,
++                                        render_widget_host, view, false);
+ }
+ 
+ void CefWebContentsViewOSR::SetPageTitle(const base::string16& title) {}
+diff --git a/libcef/browser/osr/web_contents_view_osr.h b/libcef/browser/osr/web_contents_view_osr.h
+index d06f3e90..90ce0b68 100644
+--- a/libcef/browser/osr/web_contents_view_osr.h
++++ b/libcef/browser/osr/web_contents_view_osr.h
+@@ -23,7 +23,9 @@ class CefRenderWidgetHostViewOSR;
+ class CefWebContentsViewOSR : public content::WebContentsView,
+                               public content::RenderViewHostDelegateView {
+  public:
+-  explicit CefWebContentsViewOSR(SkColor background_color);
++  explicit CefWebContentsViewOSR(SkColor background_color,
++                                 bool use_shared_texture,
++                                 bool use_external_begin_frame);
+   ~CefWebContentsViewOSR() override;
+ 
+   void WebContentsCreated(content::WebContents* web_contents);
+@@ -80,6 +82,8 @@ class CefWebContentsViewOSR : public content::WebContentsView,
+   CefBrowserHostImpl* GetBrowser() const;
+ 
+   const SkColor background_color_;
++  const bool use_shared_texture_;
++  const bool use_external_begin_frame_;
+ 
+   content::WebContents* web_contents_;
+ 
+diff --git a/libcef/browser/views/browser_platform_delegate_views.cc b/libcef/browser/views/browser_platform_delegate_views.cc
+index dcf190a7..b60b2ceb 100644
+--- a/libcef/browser/views/browser_platform_delegate_views.cc
++++ b/libcef/browser/views/browser_platform_delegate_views.cc
+@@ -165,6 +165,14 @@ void CefBrowserPlatformDelegateViews::PopupBrowserCreated(
+   }
+ }
+ 
++bool CefBrowserPlatformDelegateViews::CanUseSharedTexture() const {
++  return native_delegate_->CanUseSharedTexture();
++}
++
++bool CefBrowserPlatformDelegateViews::CanUseExternalBeginFrame() const {
++  return native_delegate_->CanUseExternalBeginFrame();
++}
++
+ SkColor CefBrowserPlatformDelegateViews::GetBackgroundColor() const {
+   return native_delegate_->GetBackgroundColor();
+ }
+diff --git a/libcef/browser/views/browser_platform_delegate_views.h b/libcef/browser/views/browser_platform_delegate_views.h
+index e2d2d971..4d80a48e 100644
+--- a/libcef/browser/views/browser_platform_delegate_views.h
++++ b/libcef/browser/views/browser_platform_delegate_views.h
+@@ -41,6 +41,8 @@ class CefBrowserPlatformDelegateViews
+       bool is_devtools) override;
+   void PopupBrowserCreated(CefBrowserHostImpl* new_browser,
+                            bool is_devtools) override;
++  bool CanUseSharedTexture() const override;
++  bool CanUseExternalBeginFrame() const override;
+   SkColor GetBackgroundColor() const override;
+   void SynchronizeVisualProperties() override;
+   void SendKeyEvent(const content::NativeWebKeyboardEvent& event) override;
+diff --git a/libcef_dll/cpptoc/browser_host_cpptoc.cc b/libcef_dll/cpptoc/browser_host_cpptoc.cc
+index e4e0ac5f..42c89652 100644
+--- a/libcef_dll/cpptoc/browser_host_cpptoc.cc
++++ b/libcef_dll/cpptoc/browser_host_cpptoc.cc
+@@ -9,7 +9,7 @@
+ // implementations. See the translator.README.txt file in the tools directory
+ // for more information.
+ //
+-// $hash=099ec6c9deac65288a47cec317ab6b355e707179$
++// $hash=2357c186875d3086fa4931a3ac8346d866cab1e3$
+ //
+ 
+ #include "libcef_dll/cpptoc/browser_host_cpptoc.h"
+@@ -615,6 +615,18 @@ void CEF_CALLBACK browser_host_invalidate(struct _cef_browser_host_t* self,
+   CefBrowserHostCppToC::Get(self)->Invalidate(type);
+ }
+ 
++void CEF_CALLBACK
++browser_host_send_external_begin_frame(struct _cef_browser_host_t* self) {
++  // AUTO-GENERATED CONTENT - DELETE THIS COMMENT BEFORE MODIFYING
++
++  DCHECK(self);
++  if (!self)
++    return;
++
++  // Execute
++  CefBrowserHostCppToC::Get(self)->SendExternalBeginFrame();
++}
++
+ void CEF_CALLBACK
+ browser_host_send_key_event(struct _cef_browser_host_t* self,
+                             const struct _cef_key_event_t* event) {
+@@ -1111,6 +1123,8 @@ CefBrowserHostCppToC::CefBrowserHostCppToC() {
+   GetStruct()->notify_screen_info_changed =
+       browser_host_notify_screen_info_changed;
+   GetStruct()->invalidate = browser_host_invalidate;
++  GetStruct()->send_external_begin_frame =
++      browser_host_send_external_begin_frame;
+   GetStruct()->send_key_event = browser_host_send_key_event;
+   GetStruct()->send_mouse_click_event = browser_host_send_mouse_click_event;
+   GetStruct()->send_mouse_move_event = browser_host_send_mouse_move_event;
+diff --git a/libcef_dll/cpptoc/render_handler_cpptoc.cc b/libcef_dll/cpptoc/render_handler_cpptoc.cc
+index a064ab8b..75641634 100644
+--- a/libcef_dll/cpptoc/render_handler_cpptoc.cc
++++ b/libcef_dll/cpptoc/render_handler_cpptoc.cc
+@@ -9,7 +9,7 @@
+ // implementations. See the translator.README.txt file in the tools directory
+ // for more information.
+ //
+-// $hash=98625368df8daaeca9df1791f1867828a6271a89$
++// $hash=a5f4a8b9202fc85c62954699cefaa7a0f0a1dc45$
+ //
+ 
+ #include "libcef_dll/cpptoc/render_handler_cpptoc.h"
+@@ -269,6 +269,45 @@ void CEF_CALLBACK render_handler_on_paint(struct _cef_render_handler_t* self,
+                                              width, height);
+ }
+ 
++void CEF_CALLBACK
++render_handler_on_accelerated_paint(struct _cef_render_handler_t* self,
++                                    cef_browser_t* browser,
++                                    cef_paint_element_type_t type,
++                                    size_t dirtyRectsCount,
++                                    cef_rect_t const* dirtyRects,
++                                    void* shared_handle) {
++  // AUTO-GENERATED CONTENT - DELETE THIS COMMENT BEFORE MODIFYING
++
++  DCHECK(self);
++  if (!self)
++    return;
++  // Verify param: browser; type: refptr_diff
++  DCHECK(browser);
++  if (!browser)
++    return;
++  // Verify param: dirtyRects; type: simple_vec_byref_const
++  DCHECK(dirtyRectsCount == 0 || dirtyRects);
++  if (dirtyRectsCount > 0 && !dirtyRects)
++    return;
++  // Verify param: shared_handle; type: simple_byaddr
++  DCHECK(shared_handle);
++  if (!shared_handle)
++    return;
++
++  // Translate param: dirtyRects; type: simple_vec_byref_const
++  std::vector<CefRect> dirtyRectsList;
++  if (dirtyRectsCount > 0) {
++    for (size_t i = 0; i < dirtyRectsCount; ++i) {
++      CefRect dirtyRectsVal = dirtyRects[i];
++      dirtyRectsList.push_back(dirtyRectsVal);
++    }
++  }
++
++  // Execute
++  CefRenderHandlerCppToC::Get(self)->OnAcceleratedPaint(
++      CefBrowserCToCpp::Wrap(browser), type, dirtyRectsList, shared_handle);
++}
++
+ void CEF_CALLBACK render_handler_on_cursor_change(
+     struct _cef_render_handler_t* self,
+     cef_browser_t* browser,
+@@ -447,6 +486,7 @@ CefRenderHandlerCppToC::CefRenderHandlerCppToC() {
+   GetStruct()->on_popup_show = render_handler_on_popup_show;
+   GetStruct()->on_popup_size = render_handler_on_popup_size;
+   GetStruct()->on_paint = render_handler_on_paint;
++  GetStruct()->on_accelerated_paint = render_handler_on_accelerated_paint;
+   GetStruct()->on_cursor_change = render_handler_on_cursor_change;
+   GetStruct()->start_dragging = render_handler_start_dragging;
+   GetStruct()->update_drag_cursor = render_handler_update_drag_cursor;
+diff --git a/libcef_dll/ctocpp/browser_host_ctocpp.cc b/libcef_dll/ctocpp/browser_host_ctocpp.cc
+index f75951ff..f92d067f 100644
+--- a/libcef_dll/ctocpp/browser_host_ctocpp.cc
++++ b/libcef_dll/ctocpp/browser_host_ctocpp.cc
+@@ -9,7 +9,7 @@
+ // implementations. See the translator.README.txt file in the tools directory
+ // for more information.
+ //
+-// $hash=be7163876280cda2e0ed6a8791fe472dabaa1e17$
++// $hash=7a2192ac7ab71919eeabbc0514eb53c0059029ce$
+ //
+ 
+ #include "libcef_dll/ctocpp/browser_host_ctocpp.h"
+@@ -534,6 +534,17 @@ void CefBrowserHostCToCpp::Invalidate(PaintElementType type) {
+   _struct->invalidate(_struct, type);
+ }
+ 
++void CefBrowserHostCToCpp::SendExternalBeginFrame() {
++  cef_browser_host_t* _struct = GetStruct();
++  if (CEF_MEMBER_MISSING(_struct, send_external_begin_frame))
++    return;
++
++  // AUTO-GENERATED CONTENT - DELETE THIS COMMENT BEFORE MODIFYING
++
++  // Execute
++  _struct->send_external_begin_frame(_struct);
++}
++
+ void CefBrowserHostCToCpp::SendKeyEvent(const CefKeyEvent& event) {
+   cef_browser_host_t* _struct = GetStruct();
+   if (CEF_MEMBER_MISSING(_struct, send_key_event))
+diff --git a/libcef_dll/ctocpp/browser_host_ctocpp.h b/libcef_dll/ctocpp/browser_host_ctocpp.h
+index b6914cf6..3fc5e707 100644
+--- a/libcef_dll/ctocpp/browser_host_ctocpp.h
++++ b/libcef_dll/ctocpp/browser_host_ctocpp.h
+@@ -9,7 +9,7 @@
+ // implementations. See the translator.README.txt file in the tools directory
+ // for more information.
+ //
+-// $hash=39ab8db08e667fac8e6dccffaa99935d8aa7d4b5$
++// $hash=0a61852aa1a8c8c808e9d2258e09a0fa341056e0$
+ //
+ 
+ #ifndef CEF_LIBCEF_DLL_CTOCPP_BROWSER_HOST_CTOCPP_H_
+@@ -86,6 +86,7 @@ class CefBrowserHostCToCpp : public CefCToCppRefCounted<CefBrowserHostCToCpp,
+   void WasHidden(bool hidden) OVERRIDE;
+   void NotifyScreenInfoChanged() OVERRIDE;
+   void Invalidate(PaintElementType type) OVERRIDE;
++  void SendExternalBeginFrame() OVERRIDE;
+   void SendKeyEvent(const CefKeyEvent& event) OVERRIDE;
+   void SendMouseClickEvent(const CefMouseEvent& event,
+                            MouseButtonType type,
+diff --git a/libcef_dll/ctocpp/render_handler_ctocpp.cc b/libcef_dll/ctocpp/render_handler_ctocpp.cc
+index 7ef48811..371a1652 100644
+--- a/libcef_dll/ctocpp/render_handler_ctocpp.cc
++++ b/libcef_dll/ctocpp/render_handler_ctocpp.cc
+@@ -9,7 +9,7 @@
+ // implementations. See the translator.README.txt file in the tools directory
+ // for more information.
+ //
+-// $hash=98ed2d6d147cc82b00f766b45e1b0e15e0f84393$
++// $hash=b35734360e6a411e9ae1edfeeaa1b56153054a58$
+ //
+ 
+ #include "libcef_dll/ctocpp/render_handler_ctocpp.h"
+@@ -200,6 +200,47 @@ void CefRenderHandlerCToCpp::OnPaint(CefRefPtr<CefBrowser> browser,
+     delete[] dirtyRectsList;
+ }
+ 
++void CefRenderHandlerCToCpp::OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
++                                                PaintElementType type,
++                                                const RectList& dirtyRects,
++                                                void* shared_handle) {
++  cef_render_handler_t* _struct = GetStruct();
++  if (CEF_MEMBER_MISSING(_struct, on_accelerated_paint))
++    return;
++
++  // AUTO-GENERATED CONTENT - DELETE THIS COMMENT BEFORE MODIFYING
++
++  // Verify param: browser; type: refptr_diff
++  DCHECK(browser.get());
++  if (!browser.get())
++    return;
++  // Verify param: shared_handle; type: simple_byaddr
++  DCHECK(shared_handle);
++  if (!shared_handle)
++    return;
++
++  // Translate param: dirtyRects; type: simple_vec_byref_const
++  const size_t dirtyRectsCount = dirtyRects.size();
++  cef_rect_t* dirtyRectsList = NULL;
++  if (dirtyRectsCount > 0) {
++    dirtyRectsList = new cef_rect_t[dirtyRectsCount];
++    DCHECK(dirtyRectsList);
++    if (dirtyRectsList) {
++      for (size_t i = 0; i < dirtyRectsCount; ++i) {
++        dirtyRectsList[i] = dirtyRects[i];
++      }
++    }
++  }
++
++  // Execute
++  _struct->on_accelerated_paint(_struct, CefBrowserCppToC::Wrap(browser), type,
++                                dirtyRectsCount, dirtyRectsList, shared_handle);
++
++  // Restore param:dirtyRects; type: simple_vec_byref_const
++  if (dirtyRectsList)
++    delete[] dirtyRectsList;
++}
++
+ void CefRenderHandlerCToCpp::OnCursorChange(
+     CefRefPtr<CefBrowser> browser,
+     CefCursorHandle cursor,
+diff --git a/libcef_dll/ctocpp/render_handler_ctocpp.h b/libcef_dll/ctocpp/render_handler_ctocpp.h
+index 1a3bc153..4b8aa259 100644
+--- a/libcef_dll/ctocpp/render_handler_ctocpp.h
++++ b/libcef_dll/ctocpp/render_handler_ctocpp.h
+@@ -9,7 +9,7 @@
+ // implementations. See the translator.README.txt file in the tools directory
+ // for more information.
+ //
+-// $hash=9e2bcb61512095fba2fca928f4696fbb39d9d3b1$
++// $hash=ea0b07fa112055448b0867858419b36f163bb8ad$
+ //
+ 
+ #ifndef CEF_LIBCEF_DLL_CTOCPP_RENDER_HANDLER_CTOCPP_H_
+@@ -52,6 +52,10 @@ class CefRenderHandlerCToCpp
+                const void* buffer,
+                int width,
+                int height) override;
++  void OnAcceleratedPaint(CefRefPtr<CefBrowser> browser,
++                          PaintElementType type,
++                          const RectList& dirtyRects,
++                          void* shared_handle) override;
+   void OnCursorChange(CefRefPtr<CefBrowser> browser,
+                       CefCursorHandle cursor,
+                       CursorType type,
+diff --git a/patch/patch.cfg b/patch/patch.cfg
+index 0522c194..f2683ae8 100644
+--- a/patch/patch.cfg
++++ b/patch/patch.cfg
+@@ -383,4 +383,9 @@ patches = [
+     # https://bugs.chromium.org/p/chromium/issues/detail?id=250514#c34
+     'name': 'webkit_rtl_scrollbars_250514',
+   },
++  {
++    # Support rendering to a hardware GL/D3D texture/surface provided by the client
++    # https://bitbucket.org/chromiumembedded/cef/issues/1006
++    'name': 'external_textures_1006',
++  },
+ ]
+diff --git a/patch/patches/external_textures_1006.patch b/patch/patches/external_textures_1006.patch
+new file mode 100644
+index 00000000..8ff4854f
+--- /dev/null
++++ b/patch/patches/external_textures_1006.patch
+@@ -0,0 +1,1627 @@
++diff --git content/browser/compositor/browser_compositor_output_surface.cc content/browser/compositor/browser_compositor_output_surface.cc
++index 924e82dadab4..bda41a02ea1c 100644
++--- content/browser/compositor/browser_compositor_output_surface.cc
+++++ content/browser/compositor/browser_compositor_output_surface.cc
++@@ -62,6 +62,10 @@ void BrowserCompositorOutputSurface::SetReflector(ReflectorImpl* reflector) {
++   OnReflectorChanged();
++ }
++
+++void* BrowserCompositorOutputSurface::GetSharedTexture() const {
+++  return nullptr;
+++}
+++
++ void BrowserCompositorOutputSurface::OnReflectorChanged() {
++ }
++
++diff --git content/browser/compositor/browser_compositor_output_surface.h content/browser/compositor/browser_compositor_output_surface.h
++index 941d70bd2a7e..6149393c1ac7 100644
++--- content/browser/compositor/browser_compositor_output_surface.h
+++++ content/browser/compositor/browser_compositor_output_surface.h
++@@ -41,6 +41,8 @@ class CONTENT_EXPORT BrowserCompositorOutputSurface
++
++   void SetReflector(ReflectorImpl* reflector);
++
+++  virtual void* GetSharedTexture() const;
+++
++   // Called when |reflector_| was updated.
++   virtual void OnReflectorChanged();
++
++diff --git content/browser/compositor/gpu_process_transport_factory.cc content/browser/compositor/gpu_process_transport_factory.cc
++index e679dbb02a81..7e4b123c415d 100644
++--- content/browser/compositor/gpu_process_transport_factory.cc
+++++ content/browser/compositor/gpu_process_transport_factory.cc
++@@ -220,6 +220,18 @@ GpuProcessTransportFactory::~GpuProcessTransportFactory() {
++   task_graph_runner_->Shutdown();
++ }
++
+++void* GpuProcessTransportFactory::GetSharedTexture(ui::Compositor* compositor) {
+++  PerCompositorDataMap::iterator it = per_compositor_data_.find(compositor);
+++  if (it == per_compositor_data_.end())
+++    return nullptr;
+++  PerCompositorData* data = it->second.get();
+++  DCHECK(data);
+++
+++  if (data->display_output_surface)
+++    return data->display_output_surface->GetSharedTexture();
+++  return nullptr;
+++}
+++
++ std::unique_ptr<viz::SoftwareOutputDevice>
++ GpuProcessTransportFactory::CreateSoftwareOutputDevice(
++     gfx::AcceleratedWidget widget,
++@@ -519,7 +531,8 @@ void GpuProcessTransportFactory::EstablishedGpuChannel(
++         display_output_surface =
++             std::make_unique<OffscreenBrowserCompositorOutputSurface>(
++                 context_provider, std::move(vsync_callback),
++-                std::unique_ptr<viz::CompositorOverlayCandidateValidator>());
+++                std::unique_ptr<viz::CompositorOverlayCandidateValidator>(),
+++                compositor->shared_texture_enabled());
++       } else if (capabilities.surfaceless) {
++ #if defined(OS_MACOSX)
++         const auto& gpu_feature_info = context_provider->GetGpuFeatureInfo();
++@@ -995,7 +1008,8 @@ GpuProcessTransportFactory::CreatePerCompositorData(
++   gfx::AcceleratedWidget widget = compositor->widget();
++
++   auto data = std::make_unique<PerCompositorData>();
++-  if (widget == gfx::kNullAcceleratedWidget) {
+++  if (widget == gfx::kNullAcceleratedWidget ||
+++      compositor->shared_texture_enabled()) {
++     data->surface_handle = gpu::kNullSurfaceHandle;
++   } else {
++ #if defined(GPU_SURFACE_HANDLE_IS_ACCELERATED_WINDOW)
++diff --git content/browser/compositor/gpu_process_transport_factory.h content/browser/compositor/gpu_process_transport_factory.h
++index 02c1ec0d59bd..8728bd83f864 100644
++--- content/browser/compositor/gpu_process_transport_factory.h
+++++ content/browser/compositor/gpu_process_transport_factory.h
++@@ -100,6 +100,7 @@ class GpuProcessTransportFactory : public ui::ContextFactory,
++   void IssueExternalBeginFrame(ui::Compositor* compositor,
++                                const viz::BeginFrameArgs& args) override;
++   void SetOutputIsSecure(ui::Compositor* compositor, bool secure) override;
+++  void* GetSharedTexture(ui::Compositor* compositor) override;
++
++   // ImageTransportFactory implementation.
++   bool IsGpuCompositingDisabled() override;
++diff --git content/browser/compositor/offscreen_browser_compositor_output_surface.cc content/browser/compositor/offscreen_browser_compositor_output_surface.cc
++index 2792d4646f50..e2c1fd0bc243 100644
++--- content/browser/compositor/offscreen_browser_compositor_output_surface.cc
+++++ content/browser/compositor/offscreen_browser_compositor_output_surface.cc
++@@ -33,10 +33,12 @@ OffscreenBrowserCompositorOutputSurface::
++         scoped_refptr<ui::ContextProviderCommandBuffer> context,
++         const UpdateVSyncParametersCallback& update_vsync_parameters_callback,
++         std::unique_ptr<viz::CompositorOverlayCandidateValidator>
++-            overlay_candidate_validator)
+++            overlay_candidate_validator,
+++        bool shared_texture_enabled)
++     : BrowserCompositorOutputSurface(std::move(context),
++                                      update_vsync_parameters_callback,
++                                      std::move(overlay_candidate_validator)),
+++      shared_texture_enabled_(shared_texture_enabled),
++       weak_ptr_factory_(this) {
++   capabilities_.uses_default_gl_framebuffer = false;
++ }
++@@ -46,6 +48,10 @@ OffscreenBrowserCompositorOutputSurface::
++   DiscardBackbuffer();
++ }
++
+++void* OffscreenBrowserCompositorOutputSurface::GetSharedTexture() const {
+++  return (void*)shared_handle_;
+++}
+++
++ void OffscreenBrowserCompositorOutputSurface::BindToClient(
++     viz::OutputSurfaceClient* client) {
++   DCHECK(client);
++@@ -54,42 +60,72 @@ void OffscreenBrowserCompositorOutputSurface::BindToClient(
++ }
++
++ void OffscreenBrowserCompositorOutputSurface::EnsureBackbuffer() {
++-  bool update_source_texture = !reflector_texture_ || reflector_changed_;
++-  reflector_changed_ = false;
++-  if (!reflector_texture_) {
++-    reflector_texture_.reset(new ReflectorTexture(context_provider()));
++-
++-    GLES2Interface* gl = context_provider_->ContextGL();
++-
++-    const int max_texture_size =
++-        context_provider_->ContextCapabilities().max_texture_size;
++-    int texture_width = std::min(max_texture_size, reshape_size_.width());
++-    int texture_height = std::min(max_texture_size, reshape_size_.height());
++-
++-    gl->BindTexture(GL_TEXTURE_2D, reflector_texture_->texture_id());
++-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
++-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
++-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
++-    gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
++-    gl->TexImage2D(GL_TEXTURE_2D, 0, GLInternalFormat(kFboTextureFormat),
++-                   texture_width, texture_height, 0,
++-                   GLDataFormat(kFboTextureFormat),
++-                   GLDataType(kFboTextureFormat), nullptr);
+++  GLES2Interface* gl = context_provider_->ContextGL();
+++
+++  const int max_texture_size =
+++      context_provider_->ContextCapabilities().max_texture_size;
+++  int texture_width = std::min(max_texture_size, reshape_size_.width());
+++  int texture_height = std::min(max_texture_size, reshape_size_.height());
+++
+++  GLuint color_attachment = 0;
+++
+++  if (shared_texture_enabled_) {
+++    if (!shared_handle_ && (texture_width > 0) && (texture_height > 0)) {
+++      gl->GenTextures(1, &shared_texture_);
+++      gl->BindTexture(GL_TEXTURE_2D, shared_texture_);
+++      gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+++      gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+++      gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+++      gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+++      shared_handle_ = gl->CreateSharedTexture(shared_texture_, texture_width,
+++                                               texture_height);
+++
+++      if (shared_handle_) {
+++        color_attachment = shared_texture_;
+++      } else {
+++        gl->DeleteTextures(1, &shared_texture_);
+++        shared_texture_ = 0;
+++      }
+++    }
+++  } else {
+++    // The shared texture code above in theory could work with the reflector
+++    // texture However, there were issues making associating it a shared surface
+++    // and then attaching it to the FBO (incomplete?)
+++    bool update_source_texture = !reflector_texture_ || reflector_changed_;
+++    reflector_changed_ = false;
+++    if (!reflector_texture_) {
+++      reflector_texture_.reset(new ReflectorTexture(context_provider()));
+++
+++      gl->BindTexture(GL_TEXTURE_2D, reflector_texture_->texture_id());
+++      gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR);
+++      gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+++      gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+++      gl->TexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+++      gl->TexImage2D(GL_TEXTURE_2D, 0, GLInternalFormat(kFboTextureFormat),
+++                     texture_width, texture_height, 0,
+++                     GLDataFormat(kFboTextureFormat),
+++                     GLDataType(kFboTextureFormat), nullptr);
+++
+++      color_attachment = reflector_texture_->texture_id();
+++
+++      // The reflector may be created later or detached and re-attached,
+++      // so don't assume it always exists. For example, ChromeOS always
+++      // creates a reflector asynchronosly when creating this for software
+++      // mirroring.  See |DisplayManager::CreateMirrorWindowAsyncIfAny|.
+++      if (reflector_ && update_source_texture)
+++        reflector_->OnSourceTextureMailboxUpdated(
+++            reflector_texture_->mailbox());
+++    }
+++  }
+++
+++  if (color_attachment) {
++     if (!fbo_)
++       gl->GenFramebuffers(1, &fbo_);
++
++     gl->BindFramebuffer(GL_FRAMEBUFFER, fbo_);
++     gl->FramebufferTexture2D(GL_FRAMEBUFFER, GL_COLOR_ATTACHMENT0,
++-                             GL_TEXTURE_2D, reflector_texture_->texture_id(),
++-                             0);
+++                             GL_TEXTURE_2D, color_attachment, 0);
++   }
++-
++-  // The reflector may be created later or detached and re-attached,
++-  // so don't assume it always exists. For example, ChromeOS always
++-  // creates a reflector asynchronosly when creating this for software
++-  // mirroring.  See |DisplayManager::CreateMirrorWindowAsyncIfAny|.
++-  if (reflector_ && update_source_texture)
++-    reflector_->OnSourceTextureMailboxUpdated(reflector_texture_->mailbox());
++ }
++
++ void OffscreenBrowserCompositorOutputSurface::DiscardBackbuffer() {
++@@ -101,6 +137,16 @@ void OffscreenBrowserCompositorOutputSurface::DiscardBackbuffer() {
++       reflector_->OnSourceTextureMailboxUpdated(nullptr);
++   }
++
+++  if (shared_handle_) {
+++    gl->DeleteSharedTexture(shared_handle_);
+++    shared_handle_ = 0ull;
+++  }
+++
+++  if (shared_texture_) {
+++    gl->DeleteTextures(1, &shared_texture_);
+++    shared_texture_ = 0;
+++  }
+++
++   if (fbo_) {
++     gl->BindFramebuffer(GL_FRAMEBUFFER, fbo_);
++     gl->DeleteFramebuffers(1, &fbo_);
++@@ -125,15 +171,20 @@ void OffscreenBrowserCompositorOutputSurface::Reshape(
++ }
++
++ void OffscreenBrowserCompositorOutputSurface::BindFramebuffer() {
++-  bool need_to_bind = !!reflector_texture_.get();
+++  GLES2Interface* gl = context_provider_->ContextGL();
++
+++  bool need_to_bind = !!reflector_texture_.get();
++   EnsureBackbuffer();
++-  DCHECK(reflector_texture_.get());
++   DCHECK(fbo_);
++
++-  if (need_to_bind) {
++-    GLES2Interface* gl = context_provider_->ContextGL();
+++  if (shared_handle_) {
++     gl->BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+++    gl->LockSharedTexture(shared_handle_);
+++  } else {
+++    DCHECK(reflector_texture_.get());
+++    if (need_to_bind) {
+++      gl->BindFramebuffer(GL_FRAMEBUFFER, fbo_);
+++    }
++   }
++ }
++
++@@ -154,6 +205,12 @@ void OffscreenBrowserCompositorOutputSurface::SwapBuffers(
++   // The original implementation had a flickering issue (crbug.com/515332).
++   gpu::gles2::GLES2Interface* gl = context_provider_->ContextGL();
++
+++  // if using a shared texture, we need to Flush
+++  if (shared_handle_) {
+++    gl->UnlockSharedTexture(shared_handle_);
+++    gl->Flush();
+++  }
+++
++   gpu::SyncToken sync_token;
++   gl->GenUnverifiedSyncTokenCHROMIUM(sync_token.GetData());
++   context_provider_->ContextSupport()->SignalSyncToken(
++diff --git content/browser/compositor/offscreen_browser_compositor_output_surface.h content/browser/compositor/offscreen_browser_compositor_output_surface.h
++index f123692aebb5..3910fb61ca19 100644
++--- content/browser/compositor/offscreen_browser_compositor_output_surface.h
+++++ content/browser/compositor/offscreen_browser_compositor_output_surface.h
++@@ -32,7 +32,8 @@ class OffscreenBrowserCompositorOutputSurface
++       scoped_refptr<ui::ContextProviderCommandBuffer> context,
++       const UpdateVSyncParametersCallback& update_vsync_parameters_callback,
++       std::unique_ptr<viz::CompositorOverlayCandidateValidator>
++-          overlay_candidate_validator);
+++          overlay_candidate_validator,
+++      bool shared_texture_enabled);
++
++   ~OffscreenBrowserCompositorOutputSurface() override;
++
++@@ -54,6 +55,8 @@ class OffscreenBrowserCompositorOutputSurface
++   gfx::BufferFormat GetOverlayBufferFormat() const override;
++   uint32_t GetFramebufferCopyTextureFormat() override;
++
+++  void* GetSharedTexture() const override;
+++
++   // BrowserCompositorOutputSurface implementation.
++   void OnReflectorChanged() override;
++
++@@ -63,6 +66,8 @@ class OffscreenBrowserCompositorOutputSurface
++
++   unsigned UpdateGpuFence() override;
++
+++  void NotifyRenderHost(const std::vector<ui::LatencyInfo>& latency_info);
+++
++   void OnSwapBuffersComplete(const std::vector<ui::LatencyInfo>& latency_info,
++                              bool need_presentation_feedback);
++
++@@ -71,6 +76,11 @@ class OffscreenBrowserCompositorOutputSurface
++   uint32_t fbo_ = 0;
++   bool reflector_changed_ = false;
++   std::unique_ptr<ReflectorTexture> reflector_texture_;
+++
+++  bool shared_texture_enabled_ = false;
+++  uint64_t shared_handle_ = 0ull;
+++  uint32_t shared_texture_ = 0;
+++
++   ui::LatencyTracker latency_tracker_;
++   base::WeakPtrFactory<OffscreenBrowserCompositorOutputSurface>
++       weak_ptr_factory_;
++diff --git content/browser/compositor/viz_process_transport_factory.cc content/browser/compositor/viz_process_transport_factory.cc
++index 7f02b82c3a42..4c571f392a5c 100644
++--- content/browser/compositor/viz_process_transport_factory.cc
+++++ content/browser/compositor/viz_process_transport_factory.cc
++@@ -349,6 +349,11 @@ viz::FrameSinkManagerImpl* VizProcessTransportFactory::GetFrameSinkManager() {
++   return nullptr;
++ }
++
+++void* VizProcessTransportFactory::GetSharedTexture(ui::Compositor* compositor) {
+++
+++	return nullptr;
+++}
+++
++ bool VizProcessTransportFactory::IsGpuCompositingDisabled() {
++   return is_gpu_compositing_disabled_;
++ }
++diff --git content/browser/compositor/viz_process_transport_factory.h content/browser/compositor/viz_process_transport_factory.h
++index 229b760eb082..260e1c56734d 100644
++--- content/browser/compositor/viz_process_transport_factory.h
+++++ content/browser/compositor/viz_process_transport_factory.h
++@@ -100,6 +100,8 @@ class VizProcessTransportFactory : public ui::ContextFactory,
++   void SetOutputIsSecure(ui::Compositor* compositor, bool secure) override;
++   viz::FrameSinkManagerImpl* GetFrameSinkManager() override;
++
+++  void* GetSharedTexture(ui::Compositor* compositor) override;
+++
++   // ImageTransportFactory implementation.
++   bool IsGpuCompositingDisabled() override;
++   ui::ContextFactory* GetContextFactory() override;
++diff --git gpu/GLES2/gl2chromium_autogen.h gpu/GLES2/gl2chromium_autogen.h
++index 0b54447d67b9..d73983f63cff 100644
++--- gpu/GLES2/gl2chromium_autogen.h
+++++ gpu/GLES2/gl2chromium_autogen.h
++@@ -402,5 +402,9 @@
++   GLES2_GET_FUN(CreateClientGpuFenceCHROMIUM)
++ #define glWaitGpuFenceCHROMIUM GLES2_GET_FUN(WaitGpuFenceCHROMIUM)
++ #define glDestroyGpuFenceCHROMIUM GLES2_GET_FUN(DestroyGpuFenceCHROMIUM)
+++#define glCreateSharedTexture GLES2_GET_FUN(CreateSharedTexture)
+++#define glLockSharedTexture GLES2_GET_FUN(LockSharedTexture)
+++#define glUnlockSharedTexture GLES2_GET_FUN(UnlockSharedTexture)
+++#define glDeleteSharedTexture GLES2_GET_FUN(DeleteSharedTexture)
++
++ #endif  // GPU_GLES2_GL2CHROMIUM_AUTOGEN_H_
++diff --git gpu/command_buffer/build_gles2_cmd_buffer.py gpu/command_buffer/build_gles2_cmd_buffer.py
++index 78cf3778e6cc..329ad866ff9d 100755
++--- gpu/command_buffer/build_gles2_cmd_buffer.py
+++++ gpu/command_buffer/build_gles2_cmd_buffer.py
++@@ -4035,6 +4035,35 @@ _FUNCTION_INFO = {
++     'extension': 'CHROMIUM_gpu_fence',
++     'extension_flag': 'chromium_gpu_fence',
++   },
+++  'CreateSharedTexture': {
+++    'type': 'Custom',
+++    'data_transfer_methods': ['shm'],
+++    'cmd_args': 'GLint texture_id, GLint width, '
+++                'GLint height, GLuint64* result',
+++    'result': ['GLuint64'],
+++    'unit_test': False,
+++    'impl_func': False,
+++    'client_test': False,
+++    'extension': True,
+++  },
+++  'LockSharedTexture': {
+++    'type': 'Custom',
+++    'unit_test': False,
+++    'client_test': False,
+++    'extension': True,
+++  },
+++  'UnlockSharedTexture': {
+++    'type': 'Custom',
+++    'unit_test': False,
+++    'client_test': False,
+++    'extension': True,
+++  },
+++  'DeleteSharedTexture': {
+++    'type': 'Custom',
+++    'unit_test': False,
+++    'client_test': False,
+++    'extension': True,
+++  },
++   'UnpremultiplyAndDitherCopyCHROMIUM': {
++     'decoder_func': 'DoUnpremultiplyAndDitherCopyCHROMIUM',
++     'cmd_args': 'GLuint source_id, GLuint dest_id, GLint x, GLint y, '
++diff --git gpu/command_buffer/client/gles2_c_lib_autogen.h gpu/command_buffer/client/gles2_c_lib_autogen.h
++index 3ddfc7188597..d48aa2b0b291 100644
++--- gpu/command_buffer/client/gles2_c_lib_autogen.h
+++++ gpu/command_buffer/client/gles2_c_lib_autogen.h
++@@ -1795,6 +1795,20 @@ void GL_APIENTRY GLES2WaitGpuFenceCHROMIUM(GLuint gpu_fence_id) {
++ void GL_APIENTRY GLES2DestroyGpuFenceCHROMIUM(GLuint gpu_fence_id) {
++   gles2::GetGLContext()->DestroyGpuFenceCHROMIUM(gpu_fence_id);
++ }
+++GLuint64 GL_APIENTRY GLES2CreateSharedTexture(GLuint texture_id,
+++                                              GLsizei width,
+++                                              GLsizei height) {
+++  return gles2::GetGLContext()->CreateSharedTexture(texture_id, width, height);
+++}
+++void GL_APIENTRY GLES2LockSharedTexture(GLuint64 shared_handle) {
+++  gles2::GetGLContext()->LockSharedTexture(shared_handle);
+++}
+++void GL_APIENTRY GLES2UnlockSharedTexture(GLuint64 shared_handle) {
+++  gles2::GetGLContext()->UnlockSharedTexture(shared_handle);
+++}
+++void GL_APIENTRY GLES2DeleteSharedTexture(GLuint64 shared_handle) {
+++  gles2::GetGLContext()->DeleteSharedTexture(shared_handle);
+++}
++
++ namespace gles2 {
++
++@@ -3147,6 +3161,22 @@ extern const NameToFunc g_gles2_function_table[] = {
++         "glDestroyGpuFenceCHROMIUM",
++         reinterpret_cast<GLES2FunctionPointer>(glDestroyGpuFenceCHROMIUM),
++     },
+++    {
+++        "glCreateSharedTexture",
+++        reinterpret_cast<GLES2FunctionPointer>(glCreateSharedTexture),
+++    },
+++    {
+++        "glLockSharedTexture",
+++        reinterpret_cast<GLES2FunctionPointer>(glLockSharedTexture),
+++    },
+++    {
+++        "glUnlockSharedTexture",
+++        reinterpret_cast<GLES2FunctionPointer>(glUnlockSharedTexture),
+++    },
+++    {
+++        "glDeleteSharedTexture",
+++        reinterpret_cast<GLES2FunctionPointer>(glDeleteSharedTexture),
+++    },
++     {
++         NULL, NULL,
++     },
++diff --git gpu/command_buffer/client/gles2_cmd_helper.h gpu/command_buffer/client/gles2_cmd_helper.h
++index 4c31d1e8d42d..01a8d74e81b6 100644
++--- gpu/command_buffer/client/gles2_cmd_helper.h
+++++ gpu/command_buffer/client/gles2_cmd_helper.h
++@@ -21,10 +21,10 @@ class GPU_GLES2_EXPORT GLES2CmdHelper : public CommandBufferHelper {
++   explicit GLES2CmdHelper(CommandBuffer* command_buffer);
++   ~GLES2CmdHelper() override;
++
++-  // Include the auto-generated part of this class. We split this because it
++-  // means we can easily edit the non-auto generated parts right here in this
++-  // file instead of having to edit some template or the code generator.
++-  #include "gpu/command_buffer/client/gles2_cmd_helper_autogen.h"
+++// Include the auto-generated part of this class. We split this because it
+++// means we can easily edit the non-auto generated parts right here in this
+++// file instead of having to edit some template or the code generator.
+++#include "gpu/command_buffer/client/gles2_cmd_helper_autogen.h"
++
++   // Helpers that could not be auto-generated.
++
++@@ -36,4 +36,3 @@ class GPU_GLES2_EXPORT GLES2CmdHelper : public CommandBufferHelper {
++ }  // namespace gpu
++
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_CMD_HELPER_H_
++-
++diff --git gpu/command_buffer/client/gles2_cmd_helper_autogen.h gpu/command_buffer/client/gles2_cmd_helper_autogen.h
++index ceb685d5f086..1a17f414d8c8 100644
++--- gpu/command_buffer/client/gles2_cmd_helper_autogen.h
+++++ gpu/command_buffer/client/gles2_cmd_helper_autogen.h
++@@ -3318,4 +3318,40 @@ void DestroyGpuFenceCHROMIUM(GLuint gpu_fence_id) {
++   }
++ }
++
+++void CreateSharedTexture(GLint texture_id,
+++                         GLint width,
+++                         GLint height,
+++                         uint32_t result_shm_id,
+++                         uint32_t result_shm_offset) {
+++  gles2::cmds::CreateSharedTexture* c =
+++      GetCmdSpace<gles2::cmds::CreateSharedTexture>();
+++  if (c) {
+++    c->Init(texture_id, width, height, result_shm_id, result_shm_offset);
+++  }
+++}
+++
+++void LockSharedTexture(GLuint64 shared_handle) {
+++  gles2::cmds::LockSharedTexture* c =
+++      GetCmdSpace<gles2::cmds::LockSharedTexture>();
+++  if (c) {
+++    c->Init(shared_handle);
+++  }
+++}
+++
+++void UnlockSharedTexture(GLuint64 shared_handle) {
+++  gles2::cmds::UnlockSharedTexture* c =
+++      GetCmdSpace<gles2::cmds::UnlockSharedTexture>();
+++  if (c) {
+++    c->Init(shared_handle);
+++  }
+++}
+++
+++void DeleteSharedTexture(GLuint64 shared_handle) {
+++  gles2::cmds::DeleteSharedTexture* c =
+++      GetCmdSpace<gles2::cmds::DeleteSharedTexture>();
+++  if (c) {
+++    c->Init(shared_handle);
+++  }
+++}
+++
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_CMD_HELPER_AUTOGEN_H_
++diff --git gpu/command_buffer/client/gles2_implementation.cc gpu/command_buffer/client/gles2_implementation.cc
++index cacd5fe22934..18e099887c31 100644
++--- gpu/command_buffer/client/gles2_implementation.cc
+++++ gpu/command_buffer/client/gles2_implementation.cc
++@@ -6993,6 +6993,22 @@ void GLES2Implementation::Viewport(GLint x,
++   CheckGLError();
++ }
++
+++GLuint64 GLES2Implementation::CreateSharedTexture(GLuint texture_id,
+++                                                  GLsizei width,
+++                                                  GLsizei height) {
+++  typedef cmds::CreateSharedTexture::Result Result;
+++  Result* result = GetResultAs<Result*>();
+++  if (!result) {
+++    return 0;
+++  }
+++  *result = 0;
+++  helper_->CreateSharedTexture(texture_id, width, height, GetResultShmId(),
+++                               GetResultShmOffset());
+++
+++  WaitForCmd();
+++  return *result;
+++}
+++
++ void GLES2Implementation::IssueBeginQuery(GLenum target,
++                                           GLuint id,
++                                           uint32_t sync_data_shm_id,
++diff --git gpu/command_buffer/client/gles2_implementation_autogen.h gpu/command_buffer/client/gles2_implementation_autogen.h
++index b94cc5863a65..550282826bf9 100644
++--- gpu/command_buffer/client/gles2_implementation_autogen.h
+++++ gpu/command_buffer/client/gles2_implementation_autogen.h
++@@ -1261,4 +1261,14 @@ void WaitGpuFenceCHROMIUM(GLuint gpu_fence_id) override;
++
++ void DestroyGpuFenceCHROMIUM(GLuint gpu_fence_id) override;
++
+++GLuint64 CreateSharedTexture(GLuint texture_id,
+++                             GLsizei width,
+++                             GLsizei height) override;
+++
+++void LockSharedTexture(GLuint64 shared_handle) override;
+++
+++void UnlockSharedTexture(GLuint64 shared_handle) override;
+++
+++void DeleteSharedTexture(GLuint64 shared_handle) override;
+++
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_IMPLEMENTATION_AUTOGEN_H_
++diff --git gpu/command_buffer/client/gles2_implementation_impl_autogen.h gpu/command_buffer/client/gles2_implementation_impl_autogen.h
++index 018ebebe4a29..07358afa6c3f 100644
++--- gpu/command_buffer/client/gles2_implementation_impl_autogen.h
+++++ gpu/command_buffer/client/gles2_implementation_impl_autogen.h
++@@ -3617,4 +3617,28 @@ void GLES2Implementation::DestroyGpuFenceCHROMIUM(GLuint gpu_fence_id) {
++   CheckGLError();
++ }
++
+++void GLES2Implementation::LockSharedTexture(GLuint64 shared_handle) {
+++  GPU_CLIENT_SINGLE_THREAD_CHECK();
+++  GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glLockSharedTexture("
+++                     << shared_handle << ")");
+++  helper_->LockSharedTexture(shared_handle);
+++  CheckGLError();
+++}
+++
+++void GLES2Implementation::UnlockSharedTexture(GLuint64 shared_handle) {
+++  GPU_CLIENT_SINGLE_THREAD_CHECK();
+++  GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glUnlockSharedTexture("
+++                     << shared_handle << ")");
+++  helper_->UnlockSharedTexture(shared_handle);
+++  CheckGLError();
+++}
+++
+++void GLES2Implementation::DeleteSharedTexture(GLuint64 shared_handle) {
+++  GPU_CLIENT_SINGLE_THREAD_CHECK();
+++  GPU_CLIENT_LOG("[" << GetLogPrefix() << "] glDeleteSharedTexture("
+++                     << shared_handle << ")");
+++  helper_->DeleteSharedTexture(shared_handle);
+++  CheckGLError();
+++}
+++
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_IMPLEMENTATION_IMPL_AUTOGEN_H_
++diff --git gpu/command_buffer/client/gles2_interface_autogen.h gpu/command_buffer/client/gles2_interface_autogen.h
++index 867cbc5af59b..467f2496ba50 100644
++--- gpu/command_buffer/client/gles2_interface_autogen.h
+++++ gpu/command_buffer/client/gles2_interface_autogen.h
++@@ -938,4 +938,10 @@ virtual GLuint CreateGpuFenceCHROMIUM() = 0;
++ virtual GLuint CreateClientGpuFenceCHROMIUM(ClientGpuFence source) = 0;
++ virtual void WaitGpuFenceCHROMIUM(GLuint gpu_fence_id) = 0;
++ virtual void DestroyGpuFenceCHROMIUM(GLuint gpu_fence_id) = 0;
+++virtual GLuint64 CreateSharedTexture(GLuint texture_id,
+++                                     GLsizei width,
+++                                     GLsizei height) = 0;
+++virtual void LockSharedTexture(GLuint64 shared_handle) = 0;
+++virtual void UnlockSharedTexture(GLuint64 shared_handle) = 0;
+++virtual void DeleteSharedTexture(GLuint64 shared_handle) = 0;
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_INTERFACE_AUTOGEN_H_
++diff --git gpu/command_buffer/client/gles2_interface_stub_autogen.h gpu/command_buffer/client/gles2_interface_stub_autogen.h
++index f834b9edc235..1ffe5f53f69b 100644
++--- gpu/command_buffer/client/gles2_interface_stub_autogen.h
+++++ gpu/command_buffer/client/gles2_interface_stub_autogen.h
++@@ -909,4 +909,10 @@ GLuint CreateGpuFenceCHROMIUM() override;
++ GLuint CreateClientGpuFenceCHROMIUM(ClientGpuFence source) override;
++ void WaitGpuFenceCHROMIUM(GLuint gpu_fence_id) override;
++ void DestroyGpuFenceCHROMIUM(GLuint gpu_fence_id) override;
+++GLuint64 CreateSharedTexture(GLuint texture_id,
+++                             GLsizei width,
+++                             GLsizei height) override;
+++void LockSharedTexture(GLuint64 shared_handle) override;
+++void UnlockSharedTexture(GLuint64 shared_handle) override;
+++void DeleteSharedTexture(GLuint64 shared_handle) override;
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_INTERFACE_STUB_AUTOGEN_H_
++diff --git gpu/command_buffer/client/gles2_interface_stub_impl_autogen.h gpu/command_buffer/client/gles2_interface_stub_impl_autogen.h
++index b2fbaa9a68c7..5216cf12a391 100644
++--- gpu/command_buffer/client/gles2_interface_stub_impl_autogen.h
+++++ gpu/command_buffer/client/gles2_interface_stub_impl_autogen.h
++@@ -1223,4 +1223,12 @@ GLuint GLES2InterfaceStub::CreateClientGpuFenceCHROMIUM(
++ }
++ void GLES2InterfaceStub::WaitGpuFenceCHROMIUM(GLuint /* gpu_fence_id */) {}
++ void GLES2InterfaceStub::DestroyGpuFenceCHROMIUM(GLuint /* gpu_fence_id */) {}
+++GLuint64 GLES2InterfaceStub::CreateSharedTexture(GLuint /* texture_id */,
+++                                                 GLsizei /* width */,
+++                                                 GLsizei /* height */) {
+++  return 0;
+++}
+++void GLES2InterfaceStub::LockSharedTexture(GLuint64 /* shared_handle */) {}
+++void GLES2InterfaceStub::UnlockSharedTexture(GLuint64 /* shared_handle */) {}
+++void GLES2InterfaceStub::DeleteSharedTexture(GLuint64 /* shared_handle */) {}
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_INTERFACE_STUB_IMPL_AUTOGEN_H_
++diff --git gpu/command_buffer/client/gles2_trace_implementation_autogen.h gpu/command_buffer/client/gles2_trace_implementation_autogen.h
++index d3d56e317818..e3f5189a95fc 100644
++--- gpu/command_buffer/client/gles2_trace_implementation_autogen.h
+++++ gpu/command_buffer/client/gles2_trace_implementation_autogen.h
++@@ -909,4 +909,10 @@ GLuint CreateGpuFenceCHROMIUM() override;
++ GLuint CreateClientGpuFenceCHROMIUM(ClientGpuFence source) override;
++ void WaitGpuFenceCHROMIUM(GLuint gpu_fence_id) override;
++ void DestroyGpuFenceCHROMIUM(GLuint gpu_fence_id) override;
+++GLuint64 CreateSharedTexture(GLuint texture_id,
+++                             GLsizei width,
+++                             GLsizei height) override;
+++void LockSharedTexture(GLuint64 shared_handle) override;
+++void UnlockSharedTexture(GLuint64 shared_handle) override;
+++void DeleteSharedTexture(GLuint64 shared_handle) override;
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_TRACE_IMPLEMENTATION_AUTOGEN_H_
++diff --git gpu/command_buffer/client/gles2_trace_implementation_impl_autogen.h gpu/command_buffer/client/gles2_trace_implementation_impl_autogen.h
++index 937ae6a6efbd..1a5f0e05a5db 100644
++--- gpu/command_buffer/client/gles2_trace_implementation_impl_autogen.h
+++++ gpu/command_buffer/client/gles2_trace_implementation_impl_autogen.h
++@@ -2610,4 +2610,26 @@ void GLES2TraceImplementation::DestroyGpuFenceCHROMIUM(GLuint gpu_fence_id) {
++   gl_->DestroyGpuFenceCHROMIUM(gpu_fence_id);
++ }
++
+++GLuint64 GLES2TraceImplementation::CreateSharedTexture(GLuint texture_id,
+++                                                       GLsizei width,
+++                                                       GLsizei height) {
+++  TRACE_EVENT_BINARY_EFFICIENT0("gpu", "GLES2Trace::CreateSharedTexture");
+++  return gl_->CreateSharedTexture(texture_id, width, height);
+++}
+++
+++void GLES2TraceImplementation::LockSharedTexture(GLuint64 shared_handle) {
+++  TRACE_EVENT_BINARY_EFFICIENT0("gpu", "GLES2Trace::LockSharedTexture");
+++  gl_->LockSharedTexture(shared_handle);
+++}
+++
+++void GLES2TraceImplementation::UnlockSharedTexture(GLuint64 shared_handle) {
+++  TRACE_EVENT_BINARY_EFFICIENT0("gpu", "GLES2Trace::UnlockSharedTexture");
+++  gl_->UnlockSharedTexture(shared_handle);
+++}
+++
+++void GLES2TraceImplementation::DeleteSharedTexture(GLuint64 shared_handle) {
+++  TRACE_EVENT_BINARY_EFFICIENT0("gpu", "GLES2Trace::DeleteSharedTexture");
+++  gl_->DeleteSharedTexture(shared_handle);
+++}
+++
++ #endif  // GPU_COMMAND_BUFFER_CLIENT_GLES2_TRACE_IMPLEMENTATION_IMPL_AUTOGEN_H_
++diff --git gpu/command_buffer/common/gles2_cmd_format_autogen.h gpu/command_buffer/common/gles2_cmd_format_autogen.h
++index fd62deb7b3d9..0c8ffd85b080 100644
++--- gpu/command_buffer/common/gles2_cmd_format_autogen.h
+++++ gpu/command_buffer/common/gles2_cmd_format_autogen.h
++@@ -16335,4 +16335,191 @@ static_assert(offsetof(DestroyGpuFenceCHROMIUM, header) == 0,
++ static_assert(offsetof(DestroyGpuFenceCHROMIUM, gpu_fence_id) == 4,
++               "offset of DestroyGpuFenceCHROMIUM gpu_fence_id should be 4");
++
+++struct CreateSharedTexture {
+++  typedef CreateSharedTexture ValueType;
+++  static const CommandId kCmdId = kCreateSharedTexture;
+++  static const cmd::ArgFlags kArgFlags = cmd::kFixed;
+++  static const uint8_t cmd_flags = CMD_FLAG_SET_TRACE_LEVEL(3);
+++
+++  typedef GLuint64 Result;
+++
+++  static uint32_t ComputeSize() {
+++    return static_cast<uint32_t>(sizeof(ValueType));  // NOLINT
+++  }
+++
+++  void SetHeader() { header.SetCmd<ValueType>(); }
+++
+++  void Init(GLint _texture_id,
+++            GLint _width,
+++            GLint _height,
+++            uint32_t _result_shm_id,
+++            uint32_t _result_shm_offset) {
+++    SetHeader();
+++    texture_id = _texture_id;
+++    width = _width;
+++    height = _height;
+++    result_shm_id = _result_shm_id;
+++    result_shm_offset = _result_shm_offset;
+++  }
+++
+++  void* Set(void* cmd,
+++            GLint _texture_id,
+++            GLint _width,
+++            GLint _height,
+++            uint32_t _result_shm_id,
+++            uint32_t _result_shm_offset) {
+++    static_cast<ValueType*>(cmd)->Init(_texture_id, _width, _height,
+++                                       _result_shm_id, _result_shm_offset);
+++    return NextCmdAddress<ValueType>(cmd);
+++  }
+++
+++  gpu::CommandHeader header;
+++  int32_t texture_id;
+++  int32_t width;
+++  int32_t height;
+++  uint32_t result_shm_id;
+++  uint32_t result_shm_offset;
+++};
+++
+++static_assert(sizeof(CreateSharedTexture) == 24,
+++              "size of CreateSharedTexture should be 24");
+++static_assert(offsetof(CreateSharedTexture, header) == 0,
+++              "offset of CreateSharedTexture header should be 0");
+++static_assert(offsetof(CreateSharedTexture, texture_id) == 4,
+++              "offset of CreateSharedTexture texture_id should be 4");
+++static_assert(offsetof(CreateSharedTexture, width) == 8,
+++              "offset of CreateSharedTexture width should be 8");
+++static_assert(offsetof(CreateSharedTexture, height) == 12,
+++              "offset of CreateSharedTexture height should be 12");
+++static_assert(offsetof(CreateSharedTexture, result_shm_id) == 16,
+++              "offset of CreateSharedTexture result_shm_id should be 16");
+++static_assert(offsetof(CreateSharedTexture, result_shm_offset) == 20,
+++              "offset of CreateSharedTexture result_shm_offset should be 20");
+++
+++struct LockSharedTexture {
+++  typedef LockSharedTexture ValueType;
+++  static const CommandId kCmdId = kLockSharedTexture;
+++  static const cmd::ArgFlags kArgFlags = cmd::kFixed;
+++  static const uint8_t cmd_flags = CMD_FLAG_SET_TRACE_LEVEL(3);
+++
+++  static uint32_t ComputeSize() {
+++    return static_cast<uint32_t>(sizeof(ValueType));  // NOLINT
+++  }
+++
+++  void SetHeader() { header.SetCmd<ValueType>(); }
+++
+++  void Init(GLuint64 _shared_handle) {
+++    SetHeader();
+++    GLES2Util::MapUint64ToTwoUint32(static_cast<uint64_t>(_shared_handle),
+++                                    &shared_handle_0, &shared_handle_1);
+++  }
+++
+++  void* Set(void* cmd, GLuint64 _shared_handle) {
+++    static_cast<ValueType*>(cmd)->Init(_shared_handle);
+++    return NextCmdAddress<ValueType>(cmd);
+++  }
+++
+++  GLuint64 shared_handle() const volatile {
+++    return static_cast<GLuint64>(
+++        GLES2Util::MapTwoUint32ToUint64(shared_handle_0, shared_handle_1));
+++  }
+++
+++  gpu::CommandHeader header;
+++  uint32_t shared_handle_0;
+++  uint32_t shared_handle_1;
+++};
+++
+++static_assert(sizeof(LockSharedTexture) == 12,
+++              "size of LockSharedTexture should be 12");
+++static_assert(offsetof(LockSharedTexture, header) == 0,
+++              "offset of LockSharedTexture header should be 0");
+++static_assert(offsetof(LockSharedTexture, shared_handle_0) == 4,
+++              "offset of LockSharedTexture shared_handle_0 should be 4");
+++static_assert(offsetof(LockSharedTexture, shared_handle_1) == 8,
+++              "offset of LockSharedTexture shared_handle_1 should be 8");
+++
+++struct UnlockSharedTexture {
+++  typedef UnlockSharedTexture ValueType;
+++  static const CommandId kCmdId = kUnlockSharedTexture;
+++  static const cmd::ArgFlags kArgFlags = cmd::kFixed;
+++  static const uint8_t cmd_flags = CMD_FLAG_SET_TRACE_LEVEL(3);
+++
+++  static uint32_t ComputeSize() {
+++    return static_cast<uint32_t>(sizeof(ValueType));  // NOLINT
+++  }
+++
+++  void SetHeader() { header.SetCmd<ValueType>(); }
+++
+++  void Init(GLuint64 _shared_handle) {
+++    SetHeader();
+++    GLES2Util::MapUint64ToTwoUint32(static_cast<uint64_t>(_shared_handle),
+++                                    &shared_handle_0, &shared_handle_1);
+++  }
+++
+++  void* Set(void* cmd, GLuint64 _shared_handle) {
+++    static_cast<ValueType*>(cmd)->Init(_shared_handle);
+++    return NextCmdAddress<ValueType>(cmd);
+++  }
+++
+++  GLuint64 shared_handle() const volatile {
+++    return static_cast<GLuint64>(
+++        GLES2Util::MapTwoUint32ToUint64(shared_handle_0, shared_handle_1));
+++  }
+++
+++  gpu::CommandHeader header;
+++  uint32_t shared_handle_0;
+++  uint32_t shared_handle_1;
+++};
+++
+++static_assert(sizeof(UnlockSharedTexture) == 12,
+++              "size of UnlockSharedTexture should be 12");
+++static_assert(offsetof(UnlockSharedTexture, header) == 0,
+++              "offset of UnlockSharedTexture header should be 0");
+++static_assert(offsetof(UnlockSharedTexture, shared_handle_0) == 4,
+++              "offset of UnlockSharedTexture shared_handle_0 should be 4");
+++static_assert(offsetof(UnlockSharedTexture, shared_handle_1) == 8,
+++              "offset of UnlockSharedTexture shared_handle_1 should be 8");
+++
+++struct DeleteSharedTexture {
+++  typedef DeleteSharedTexture ValueType;
+++  static const CommandId kCmdId = kDeleteSharedTexture;
+++  static const cmd::ArgFlags kArgFlags = cmd::kFixed;
+++  static const uint8_t cmd_flags = CMD_FLAG_SET_TRACE_LEVEL(3);
+++
+++  static uint32_t ComputeSize() {
+++    return static_cast<uint32_t>(sizeof(ValueType));  // NOLINT
+++  }
+++
+++  void SetHeader() { header.SetCmd<ValueType>(); }
+++
+++  void Init(GLuint64 _shared_handle) {
+++    SetHeader();
+++    GLES2Util::MapUint64ToTwoUint32(static_cast<uint64_t>(_shared_handle),
+++                                    &shared_handle_0, &shared_handle_1);
+++  }
+++
+++  void* Set(void* cmd, GLuint64 _shared_handle) {
+++    static_cast<ValueType*>(cmd)->Init(_shared_handle);
+++    return NextCmdAddress<ValueType>(cmd);
+++  }
+++
+++  GLuint64 shared_handle() const volatile {
+++    return static_cast<GLuint64>(
+++        GLES2Util::MapTwoUint32ToUint64(shared_handle_0, shared_handle_1));
+++  }
+++
+++  gpu::CommandHeader header;
+++  uint32_t shared_handle_0;
+++  uint32_t shared_handle_1;
+++};
+++
+++static_assert(sizeof(DeleteSharedTexture) == 12,
+++              "size of DeleteSharedTexture should be 12");
+++static_assert(offsetof(DeleteSharedTexture, header) == 0,
+++              "offset of DeleteSharedTexture header should be 0");
+++static_assert(offsetof(DeleteSharedTexture, shared_handle_0) == 4,
+++              "offset of DeleteSharedTexture shared_handle_0 should be 4");
+++static_assert(offsetof(DeleteSharedTexture, shared_handle_1) == 8,
+++              "offset of DeleteSharedTexture shared_handle_1 should be 8");
+++
++ #endif  // GPU_COMMAND_BUFFER_COMMON_GLES2_CMD_FORMAT_AUTOGEN_H_
++diff --git gpu/command_buffer/common/gles2_cmd_format_test_autogen.h gpu/command_buffer/common/gles2_cmd_format_test_autogen.h
++index e8ba4ec4bb26..bb983304d529 100644
++--- gpu/command_buffer/common/gles2_cmd_format_test_autogen.h
+++++ gpu/command_buffer/common/gles2_cmd_format_test_autogen.h
++@@ -5418,4 +5418,50 @@ TEST_F(GLES2FormatTest, DestroyGpuFenceCHROMIUM) {
++   CheckBytesWrittenMatchesExpectedSize(next_cmd, sizeof(cmd));
++ }
++
+++TEST_F(GLES2FormatTest, CreateSharedTexture) {
+++  cmds::CreateSharedTexture& cmd = *GetBufferAs<cmds::CreateSharedTexture>();
+++  void* next_cmd = cmd.Set(&cmd, static_cast<GLint>(11), static_cast<GLint>(12),
+++                           static_cast<GLint>(13), static_cast<uint32_t>(14),
+++                           static_cast<uint32_t>(15));
+++  EXPECT_EQ(static_cast<uint32_t>(cmds::CreateSharedTexture::kCmdId),
+++            cmd.header.command);
+++  EXPECT_EQ(sizeof(cmd), cmd.header.size * 4u);
+++  EXPECT_EQ(static_cast<GLint>(11), cmd.texture_id);
+++  EXPECT_EQ(static_cast<GLint>(12), cmd.width);
+++  EXPECT_EQ(static_cast<GLint>(13), cmd.height);
+++  EXPECT_EQ(static_cast<uint32_t>(14), cmd.result_shm_id);
+++  EXPECT_EQ(static_cast<uint32_t>(15), cmd.result_shm_offset);
+++  CheckBytesWrittenMatchesExpectedSize(next_cmd, sizeof(cmd));
+++}
+++
+++TEST_F(GLES2FormatTest, LockSharedTexture) {
+++  cmds::LockSharedTexture& cmd = *GetBufferAs<cmds::LockSharedTexture>();
+++  void* next_cmd = cmd.Set(&cmd, static_cast<GLuint64>(11));
+++  EXPECT_EQ(static_cast<uint32_t>(cmds::LockSharedTexture::kCmdId),
+++            cmd.header.command);
+++  EXPECT_EQ(sizeof(cmd), cmd.header.size * 4u);
+++  EXPECT_EQ(static_cast<GLuint64>(11), cmd.shared_handle());
+++  CheckBytesWrittenMatchesExpectedSize(next_cmd, sizeof(cmd));
+++}
+++
+++TEST_F(GLES2FormatTest, UnlockSharedTexture) {
+++  cmds::UnlockSharedTexture& cmd = *GetBufferAs<cmds::UnlockSharedTexture>();
+++  void* next_cmd = cmd.Set(&cmd, static_cast<GLuint64>(11));
+++  EXPECT_EQ(static_cast<uint32_t>(cmds::UnlockSharedTexture::kCmdId),
+++            cmd.header.command);
+++  EXPECT_EQ(sizeof(cmd), cmd.header.size * 4u);
+++  EXPECT_EQ(static_cast<GLuint64>(11), cmd.shared_handle());
+++  CheckBytesWrittenMatchesExpectedSize(next_cmd, sizeof(cmd));
+++}
+++
+++TEST_F(GLES2FormatTest, DeleteSharedTexture) {
+++  cmds::DeleteSharedTexture& cmd = *GetBufferAs<cmds::DeleteSharedTexture>();
+++  void* next_cmd = cmd.Set(&cmd, static_cast<GLuint64>(11));
+++  EXPECT_EQ(static_cast<uint32_t>(cmds::DeleteSharedTexture::kCmdId),
+++            cmd.header.command);
+++  EXPECT_EQ(sizeof(cmd), cmd.header.size * 4u);
+++  EXPECT_EQ(static_cast<GLuint64>(11), cmd.shared_handle());
+++  CheckBytesWrittenMatchesExpectedSize(next_cmd, sizeof(cmd));
+++}
+++
++ #endif  // GPU_COMMAND_BUFFER_COMMON_GLES2_CMD_FORMAT_TEST_AUTOGEN_H_
++diff --git gpu/command_buffer/common/gles2_cmd_ids_autogen.h gpu/command_buffer/common/gles2_cmd_ids_autogen.h
++index 6200ec98146a..9f6c2936b0ba 100644
++--- gpu/command_buffer/common/gles2_cmd_ids_autogen.h
+++++ gpu/command_buffer/common/gles2_cmd_ids_autogen.h
++@@ -340,7 +340,11 @@
++   OP(WindowRectanglesEXTImmediate)                         /* 581 */ \
++   OP(CreateGpuFenceINTERNAL)                               /* 582 */ \
++   OP(WaitGpuFenceCHROMIUM)                                 /* 583 */ \
++-  OP(DestroyGpuFenceCHROMIUM)                              /* 584 */
+++  OP(DestroyGpuFenceCHROMIUM)                              /* 584 */ \
+++  OP(CreateSharedTexture)                                  /* 585 */ \
+++  OP(LockSharedTexture)                                    /* 586 */ \
+++  OP(UnlockSharedTexture)                                  /* 587 */ \
+++  OP(DeleteSharedTexture)                                  /* 588 */
++
++ enum CommandId {
++   kOneBeforeStartPoint =
++diff --git gpu/command_buffer/gles2_cmd_buffer_functions.txt gpu/command_buffer/gles2_cmd_buffer_functions.txt
++index d3fb94877623..43deaab967fb 100644
++--- gpu/command_buffer/gles2_cmd_buffer_functions.txt
+++++ gpu/command_buffer/gles2_cmd_buffer_functions.txt
++@@ -390,3 +390,9 @@ GL_APICALL void         GL_APIENTRY glCreateGpuFenceINTERNAL (GLuint gpu_fence_i
++ GL_APICALL GLuint       GL_APIENTRY glCreateClientGpuFenceCHROMIUM (ClientGpuFence source);
++ GL_APICALL void         GL_APIENTRY glWaitGpuFenceCHROMIUM (GLuint gpu_fence_id);
++ GL_APICALL void         GL_APIENTRY glDestroyGpuFenceCHROMIUM (GLuint gpu_fence_id);
+++
+++// shared handle extensions
+++GL_APICALL GLuint64     GL_APIENTRY glCreateSharedTexture (GLuint texture_id, GLsizei width, GLsizei height);
+++GL_APICALL void         GL_APIENTRY glLockSharedTexture (GLuint64 shared_handle);
+++GL_APICALL void         GL_APIENTRY glUnlockSharedTexture (GLuint64 shared_handle);
+++GL_APICALL void         GL_APIENTRY glDeleteSharedTexture (GLuint64 shared_handle);
++diff --git gpu/command_buffer/service/BUILD.gn gpu/command_buffer/service/BUILD.gn
++index 57b6a35dd3d9..226fbc1e9fc2 100644
++--- gpu/command_buffer/service/BUILD.gn
+++++ gpu/command_buffer/service/BUILD.gn
++@@ -118,6 +118,8 @@ target(link_target_type, "gles2_sources") {
++     "decoder_context.h",
++     "error_state.cc",
++     "error_state.h",
+++    "external_texture_manager.cc",
+++    "external_texture_manager.h",
++     "feature_info.cc",
++     "feature_info.h",
++     "framebuffer_completeness_cache.cc",
++diff --git gpu/command_buffer/service/external_texture_manager.cc gpu/command_buffer/service/external_texture_manager.cc
++new file mode 100644
++index 000000000000..64debe37a04b
++--- /dev/null
+++++ gpu/command_buffer/service/external_texture_manager.cc
++@@ -0,0 +1,334 @@
+++#include "external_texture_manager.h"
+++
+++#include "third_party/khronos/EGL/egl.h"
+++#include "third_party/khronos/EGL/eglext.h"
+++#include "ui/gl/gl_bindings.h"
+++#include "ui/gl/gl_image.h"
+++#include "ui/gl/gl_surface_egl.h"
+++
+++#include "gpu/command_buffer/service/service_utils.h"
+++#include "ui/gl/gl_context_egl.h"
+++#include "ui/gl/init/gl_factory.h"
+++
+++#if defined(OS_WIN)
+++#include <d3d11_1.h>
+++#include "ui/gl/gl_angle_util_win.h"
+++#include "ui/gl/gl_image_dxgi.h"
+++#endif
+++
+++#ifndef EGL_ANGLE_d3d_texture_client_buffer
+++#define EGL_ANGLE_d3d_texture_client_buffer 1
+++#define EGL_D3D_TEXTURE_ANGLE 0x33A3
+++#endif /* EGL_ANGLE_d3d_texture_client_buffer */
+++
+++namespace gpu {
+++namespace gles2 {
+++
+++#if defined(OS_WIN)
+++class GLImageDXGISharedHandle : public gl::GLImageDXGIBase {
+++ public:
+++  GLImageDXGISharedHandle(const gfx::Size& size)
+++      : GLImageDXGIBase(size),
+++        handle_((HANDLE)0),
+++        surface_(EGL_NO_SURFACE),
+++        texture_id_(0) {}
+++
+++  void* share_handle() const { return handle_; }
+++
+++  bool Initialize() {
+++    Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device =
+++        gl::QueryD3D11DeviceObjectFromANGLE();
+++    if (!d3d11_device) {
+++      return false;
+++    }
+++
+++    Microsoft::WRL::ComPtr<ID3D11Device1> d3d11_device1;
+++    HRESULT hr = d3d11_device.As(&d3d11_device1);
+++    if (FAILED(hr)) {
+++      return false;
+++    }
+++
+++    D3D11_TEXTURE2D_DESC td = {0};
+++    td.ArraySize = 1;
+++    td.CPUAccessFlags = 0;
+++    td.Format = DXGI_FORMAT_B8G8R8A8_UNORM;
+++    td.Width = GetSize().width();
+++    td.Height = GetSize().height();
+++    td.MipLevels = 1;
+++    td.SampleDesc.Count = 1;
+++    td.SampleDesc.Quality = 0;
+++    td.Usage = D3D11_USAGE_DEFAULT;
+++    td.BindFlags = D3D11_BIND_RENDER_TARGET | D3D11_BIND_SHADER_RESOURCE;
+++    td.MiscFlags = 0;
+++
+++    hr = d3d11_device1->CreateTexture2D(&td, nullptr, texture_.GetAddressOf());
+++    if (FAILED(hr)) {
+++      return false;
+++    }
+++
+++    // Create a staging texture that will not be a render-target, but will be
+++    // shared.  We could make the render target directly shareable, but the
+++    // staged copy is safer for synchronization and less problematic
+++    td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
+++    td.MiscFlags = D3D11_RESOURCE_MISC_SHARED;
+++    hr = d3d11_device1->CreateTexture2D(&td, nullptr,
+++                                        staging_texture_.GetAddressOf());
+++    if (FAILED(hr)) {
+++      return false;
+++    }
+++
+++    // If using a staging texture ... then we need the shared handle for that
+++    Microsoft::WRL::ComPtr<IDXGIResource> dxgi_res;
+++    if (staging_texture_.Get()) {
+++      hr = staging_texture_.As(&dxgi_res);
+++    } else {
+++      hr = texture_.As(&dxgi_res);
+++    }
+++    if (SUCCEEDED(hr)) {
+++      dxgi_res->GetSharedHandle(&handle_);
+++    }
+++
+++    return true;
+++  }
+++
+++  void Lock() {
+++    // in the future - a keyed mutex could be utilized here
+++  }
+++
+++  void Unlock() {
+++    if (staging_texture_.Get() && texture_.Get()) {
+++      Microsoft::WRL::ComPtr<ID3D11Device> d3d11_device;
+++      staging_texture_->GetDevice(&d3d11_device);
+++      if (d3d11_device.Get()) {
+++        Microsoft::WRL::ComPtr<ID3D11DeviceContext> d3d11_ctx;
+++        d3d11_device->GetImmediateContext(&d3d11_ctx);
+++        if (d3d11_ctx.Get()) {
+++          d3d11_ctx->CopyResource(staging_texture_.Get(), texture_.Get());
+++        }
+++      }
+++    }
+++  }
+++
+++  void SetSurface(EGLSurface surface, GLuint texture_id) {
+++    surface_ = surface;
+++    texture_id_ = texture_id;
+++  }
+++
+++  EGLSurface surface() const { return surface_; }
+++
+++  GLuint texture_id() const { return texture_id_; }
+++
+++ protected:
+++  ~GLImageDXGISharedHandle() override {}
+++
+++ private:
+++  HANDLE handle_;
+++  Microsoft::WRL::ComPtr<ID3D11Texture2D> staging_texture_;
+++  EGLSurface surface_;
+++  GLuint texture_id_;
+++};
+++
+++#endif
+++
+++ExternalTextureManager::ExternalTextureManager() {}
+++
+++ExternalTextureManager::~ExternalTextureManager() {}
+++
+++void* ExternalTextureManager::CreateTexture(GLuint texture_id,
+++                                            uint32_t width,
+++                                            uint32_t height,
+++                                            TextureManager* tex_man) {
+++  void* share_handle = nullptr;
+++
+++#if defined(OS_WIN)
+++  EGLDisplay egl_display = gl::GLSurfaceEGL::GetHardwareDisplay();
+++  if (egl_display == EGL_NO_DISPLAY) {
+++    return nullptr;
+++  }
+++
+++  EGLContext curContext = eglGetCurrentContext();
+++  if (curContext == EGL_NO_CONTEXT) {
+++    return nullptr;
+++  }
+++
+++  gfx::Size size(width, height);
+++  scoped_refptr<gl::GLImage> image;
+++  void* texture = nullptr;
+++
+++  GLImageDXGISharedHandle* dxgi_image = new GLImageDXGISharedHandle(size);
+++  if (!dxgi_image->Initialize()) {
+++    return nullptr;
+++  }
+++  image = dxgi_image;
+++  share_handle = dxgi_image->share_handle();
+++  texture = dxgi_image->texture().Get();
+++
+++  if (!image) {  // this check seems unnecessary
+++    return nullptr;
+++  }
+++
+++  EGLint numConfigs = 0;
+++  EGLint configAttrs[] = {
+++      EGL_RENDERABLE_TYPE,
+++      EGL_OPENGL_ES3_BIT,  // must remain in this position for ES2 fallback
+++      EGL_SURFACE_TYPE,
+++      EGL_PBUFFER_BIT,
+++      EGL_BUFFER_SIZE,
+++      32,
+++      EGL_RED_SIZE,
+++      8,
+++      EGL_GREEN_SIZE,
+++      8,
+++      EGL_BLUE_SIZE,
+++      8,
+++      EGL_ALPHA_SIZE,
+++      8,
+++      EGL_DEPTH_SIZE,
+++      0,
+++      EGL_STENCIL_SIZE,
+++      0,
+++      EGL_SAMPLE_BUFFERS,
+++      0,
+++      EGL_NONE};
+++
+++  EGLConfig config = nullptr;
+++  if (eglChooseConfig(egl_display, configAttrs, &config, 1, &numConfigs) !=
+++      EGL_TRUE) {
+++    return nullptr;
+++  }
+++
+++  EGLSurface surface = EGL_NO_SURFACE;
+++  EGLint surfAttrs[] = {EGL_WIDTH,
+++                        width,
+++                        EGL_HEIGHT,
+++                        height,
+++                        EGL_TEXTURE_TARGET,
+++                        EGL_TEXTURE_2D,
+++                        EGL_TEXTURE_FORMAT,
+++                        EGL_TEXTURE_RGBA,
+++                        EGL_NONE};
+++
+++  surface = eglCreatePbufferFromClientBuffer(egl_display, EGL_D3D_TEXTURE_ANGLE,
+++                                             texture, config, surfAttrs);
+++  if (surface == EGL_NO_SURFACE) {
+++    // fallback to ES2 - it could be that we're running on older hardware
+++    // and ES3 isn't available
+++
+++    // EGL_RENDERABLE_TYPE is the bit at configAttrs[0]
+++    configAttrs[1] = EGL_OPENGL_ES2_BIT;
+++    config = nullptr;
+++    if (eglChooseConfig(egl_display, configAttrs, &config, 1, &numConfigs) ==
+++        EGL_TRUE) {
+++      surface = eglCreatePbufferFromClientBuffer(
+++          egl_display, EGL_D3D_TEXTURE_ANGLE, texture, config, surfAttrs);
+++    }
+++
+++    // still no surface? we're done
+++    if (surface == EGL_NO_SURFACE) {
+++      return nullptr;
+++    }
+++  }
+++
+++  dxgi_image->SetSurface(surface, texture_id);
+++
+++  surfaceMap_[share_handle] = image;
+++
+++  EGLSurface drawSurface = eglGetCurrentSurface(EGL_DRAW);
+++  EGLSurface readSurface = eglGetCurrentSurface(EGL_READ);
+++
+++  eglMakeCurrent(egl_display, surface, surface, curContext);
+++
+++  if (eglBindTexImage(egl_display, surface, EGL_BACK_BUFFER)) {
+++    if (tex_man) {
+++      TextureRef* texture_ref = tex_man->GetTexture(texture_id);
+++      tex_man->SetLevelInfo(texture_ref, GL_TEXTURE_2D, 0, GL_BGRA_EXT, width,
+++                            height, 1, 0, GL_BGRA_EXT, GL_UNSIGNED_BYTE,
+++                            gfx::Rect(size));
+++      tex_man->SetLevelImage(texture_ref, GL_TEXTURE_2D, 0, image.get(),
+++                             Texture::BOUND);
+++    }
+++  }
+++
+++  eglMakeCurrent(egl_display, drawSurface, readSurface, curContext);
+++
+++#endif
+++
+++  return share_handle;
+++}
+++
+++void ExternalTextureManager::LockTexture(void* handle) {
+++#if defined(OS_WIN)
+++  auto const img = surfaceMap_.find(handle);
+++  if (img != surfaceMap_.end()) {
+++    GLImageDXGISharedHandle* dxgi_image =
+++        reinterpret_cast<GLImageDXGISharedHandle*>(img->second.get());
+++    dxgi_image->Lock();
+++  }
+++#endif
+++}
+++
+++void ExternalTextureManager::UnlockTexture(void* handle) {
+++#if defined(OS_WIN)
+++  auto const img = surfaceMap_.find(handle);
+++  if (img != surfaceMap_.end()) {
+++    GLImageDXGISharedHandle* dxgi_image =
+++        reinterpret_cast<GLImageDXGISharedHandle*>(img->second.get());
+++    dxgi_image->Unlock();
+++  }
+++#endif
+++}
+++
+++void ExternalTextureManager::DeleteTexture(void* handle,
+++                                           TextureManager* tex_man) {
+++#if defined(OS_WIN)
+++
+++  EGLDisplay egl_display = gl::GLSurfaceEGL::GetHardwareDisplay();
+++  if (egl_display == EGL_NO_DISPLAY) {
+++    return;
+++  }
+++  auto const img = surfaceMap_.find(handle);
+++  if (img == surfaceMap_.end()) {
+++    return;
+++  }
+++
+++  EGLSurface surface = EGL_NO_SURFACE;
+++  GLuint texture_id = 0;
+++
+++  GLImageDXGISharedHandle* dxgi_image =
+++      reinterpret_cast<GLImageDXGISharedHandle*>(img->second.get());
+++  surface = dxgi_image->surface();
+++  texture_id = dxgi_image->texture_id();
+++
+++  if (surface != EGL_NO_SURFACE) {
+++    EGLContext curContext = eglGetCurrentContext();
+++    if (curContext != EGL_NO_CONTEXT) {
+++      EGLSurface drawSurface = eglGetCurrentSurface(EGL_DRAW);
+++      EGLSurface readSurface = eglGetCurrentSurface(EGL_READ);
+++
+++      eglMakeCurrent(egl_display, surface, surface, curContext);
+++
+++      TextureRef* texture_ref = nullptr;
+++      if (tex_man) {
+++        texture_ref = tex_man->GetTexture(texture_id);
+++      }
+++
+++      eglReleaseTexImage(egl_display, surface, EGL_BACK_BUFFER);
+++
+++      if (tex_man && texture_ref) {
+++        tex_man->SetLevelInfo(texture_ref, GL_TEXTURE_2D, 0, GL_RGBA, 0, 0, 1,
+++                              0, GL_RGBA, GL_UNSIGNED_BYTE, gfx::Rect());
+++        tex_man->SetLevelImage(texture_ref, GL_TEXTURE_2D, 0, nullptr,
+++                               Texture::UNBOUND);
+++      }
+++
+++      eglMakeCurrent(egl_display, drawSurface, readSurface, curContext);
+++
+++      eglDestroySurface(egl_display, surface);
+++    }
+++  }
+++  surfaceMap_.erase(img);
+++
+++#endif
+++}
+++}
+++}  // namespace gpu
++diff --git gpu/command_buffer/service/external_texture_manager.h gpu/command_buffer/service/external_texture_manager.h
++new file mode 100644
++index 000000000000..9c0ec6dc3749
++--- /dev/null
+++++ gpu/command_buffer/service/external_texture_manager.h
++@@ -0,0 +1,42 @@
+++#ifndef EXTERNAL_TEXTURE_MANAGER_H_
+++#define EXTERNAL_TEXTURE_MANAGER_H_
+++#pragma once
+++
+++#include <map>
+++
+++#include "gpu/command_buffer/service/texture_manager.h"
+++#include "gpu/gpu_export.h"
+++#include "ui/gl/gl_image.h"
+++#include "ui/gl/gl_surface_egl.h"
+++
+++namespace gl {
+++class GLImage;
+++}
+++
+++namespace gpu {
+++namespace gles2 {
+++
+++class GPU_GLES2_EXPORT ExternalTextureManager {
+++ public:
+++  ExternalTextureManager();
+++  ~ExternalTextureManager();
+++
+++  void* CreateTexture(GLuint texture_id,
+++                      uint32_t width,
+++                      uint32_t height,
+++                      TextureManager* tex_man);
+++
+++  void LockTexture(void* handle);
+++  void UnlockTexture(void* handle);
+++
+++  void DeleteTexture(void* handle, TextureManager* tex_man);
+++
+++ private:
+++  typedef std::map<void*, scoped_refptr<gl::GLImage>> ExternalSurfaceMap;
+++  ExternalSurfaceMap surfaceMap_;
+++};
+++
+++}  // namespace gles2
+++}  // namespace gpu
+++
+++#endif
++diff --git gpu/command_buffer/service/gles2_cmd_decoder.cc gpu/command_buffer/service/gles2_cmd_decoder.cc
++index 6acee25d5b6a..d937a1d7074d 100644
++--- gpu/command_buffer/service/gles2_cmd_decoder.cc
+++++ gpu/command_buffer/service/gles2_cmd_decoder.cc
++@@ -41,6 +41,7 @@
++ #include "gpu/command_buffer/service/context_state.h"
++ #include "gpu/command_buffer/service/decoder_client.h"
++ #include "gpu/command_buffer/service/error_state.h"
+++#include "gpu/command_buffer/service/external_texture_manager.h"
++ #include "gpu/command_buffer/service/feature_info.h"
++ #include "gpu/command_buffer/service/framebuffer_manager.h"
++ #include "gpu/command_buffer/service/gl_stream_texture_image.h"
++@@ -846,6 +847,13 @@ class GLES2DecoderImpl : public GLES2Decoder, public ErrorStateClient {
++     return group_->mailbox_manager();
++   }
++
+++  ExternalTextureManager* external_texture_manager() {
+++    if (!external_texture_manager_.get()) {
+++      external_texture_manager_.reset(new gles2::ExternalTextureManager());
+++    }
+++    return external_texture_manager_.get();
+++  }
+++
++   ImageManager* image_manager() { return group_->image_manager(); }
++
++   VertexArrayManager* vertex_array_manager() {
++@@ -2462,6 +2470,7 @@ class GLES2DecoderImpl : public GLES2Decoder, public ErrorStateClient {
++   std::unique_ptr<GpuFenceManager> gpu_fence_manager_;
++
++   std::unique_ptr<VertexArrayManager> vertex_array_manager_;
+++  std::unique_ptr<ExternalTextureManager> external_texture_manager_;
++
++   // The format of the back buffer_
++   GLenum back_buffer_color_format_;
++@@ -5271,6 +5280,59 @@ error::Error GLES2DecoderImpl::HandleDestroyGpuFenceCHROMIUM(
++   return error::kNoError;
++ }
++
+++error::Error GLES2DecoderImpl::HandleCreateSharedTexture(
+++    uint32_t immediate_data_size,
+++    const volatile void* cmd_data) {
+++  const volatile gles2::cmds::CreateSharedTexture& c =
+++      *static_cast<const volatile gles2::cmds::CreateSharedTexture*>(cmd_data);
+++  GLuint texture_id = c.texture_id;
+++  uint32_t width = c.width;
+++  uint32_t height = c.height;
+++
+++  typedef cmds::CreateSharedTexture::Result Result;
+++  Result* result_dst = GetSharedMemoryAs<Result*>(
+++      c.result_shm_id, c.result_shm_offset, sizeof(*result_dst));
+++  if (!result_dst) {
+++    return error::kOutOfBounds;
+++  }
+++
+++  void* shared_handle = external_texture_manager()->CreateTexture(
+++      texture_id, width, height, texture_manager());
+++
+++  *result_dst = (GLuint64)(shared_handle);
+++  return error::kNoError;
+++}
+++
+++error::Error GLES2DecoderImpl::HandleLockSharedTexture(
+++    uint32_t immediate_data_size,
+++    const volatile void* cmd_data) {
+++  const volatile gles2::cmds::LockSharedTexture& c =
+++      *static_cast<const volatile gles2::cmds::LockSharedTexture*>(cmd_data);
+++  void* handle = (void*)(c.shared_handle());
+++  external_texture_manager()->LockTexture(handle);
+++  return error::kNoError;
+++}
+++
+++error::Error GLES2DecoderImpl::HandleUnlockSharedTexture(
+++    uint32_t immediate_data_size,
+++    const volatile void* cmd_data) {
+++  const volatile gles2::cmds::UnlockSharedTexture& c =
+++      *static_cast<const volatile gles2::cmds::UnlockSharedTexture*>(cmd_data);
+++  void* handle = (void*)(c.shared_handle());
+++  external_texture_manager()->UnlockTexture(handle);
+++  return error::kNoError;
+++}
+++
+++error::Error GLES2DecoderImpl::HandleDeleteSharedTexture(
+++    uint32_t immediate_data_size,
+++    const volatile void* cmd_data) {
+++  const volatile gles2::cmds::DeleteSharedTexture& c =
+++      *static_cast<const volatile gles2::cmds::DeleteSharedTexture*>(cmd_data);
+++  void* handle = (void*)(c.shared_handle());
+++  external_texture_manager()->DeleteTexture(handle, texture_manager());
+++  return error::kNoError;
+++}
+++
++ void GLES2DecoderImpl::CreateBackTexture() {
++   for (auto it = saved_back_textures_.begin(); it != saved_back_textures_.end();
++        ++it) {
++diff --git gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc
++index 2d7d4c2ebfde..1031490eb8aa 100644
++--- gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc
+++++ gpu/command_buffer/service/gles2_cmd_decoder_passthrough.cc
++@@ -11,6 +11,7 @@
++ #include "base/strings/string_split.h"
++ #include "gpu/command_buffer/service/command_buffer_service.h"
++ #include "gpu/command_buffer/service/decoder_client.h"
+++#include "gpu/command_buffer/service/external_texture_manager.h"
++ #include "gpu/command_buffer/service/feature_info.h"
++ #include "gpu/command_buffer/service/gl_utils.h"
++ #include "gpu/command_buffer/service/gpu_fence_manager.h"
++@@ -2086,6 +2087,67 @@ error::Error GLES2DecoderPassthroughImpl::CheckSwapBuffersResult(
++   return error::kNoError;
++ }
++
+++ExternalTextureManager*
+++GLES2DecoderPassthroughImpl::external_texture_manager() {
+++  if (!external_texture_manager_.get()) {
+++    external_texture_manager_.reset(new gles2::ExternalTextureManager());
+++  }
+++  return external_texture_manager_.get();
+++}
+++
+++error::Error GLES2DecoderPassthroughImpl::HandleCreateSharedTexture(
+++    uint32_t immediate_data_size,
+++    const volatile void* cmd_data) {
+++  const volatile gles2::cmds::CreateSharedTexture& c =
+++      *static_cast<const volatile gles2::cmds::CreateSharedTexture*>(cmd_data);
+++  GLuint texture_id = c.texture_id;
+++  uint32_t width = c.width;
+++  uint32_t height = c.height;
+++
+++  typedef cmds::CreateSharedTexture::Result Result;
+++  Result* result_dst = GetSharedMemoryAs<Result*>(
+++      c.result_shm_id, c.result_shm_offset, sizeof(*result_dst));
+++  if (!result_dst) {
+++    return error::kOutOfBounds;
+++  }
+++
+++  void* shared_handle = external_texture_manager()->CreateTexture(
+++      texture_id, width, height, nullptr);
+++
+++  *result_dst = (GLuint64)(shared_handle);
+++  return error::kNoError;
+++}
+++
+++error::Error GLES2DecoderPassthroughImpl::HandleLockSharedTexture(
+++    uint32_t immediate_data_size,
+++    const volatile void* cmd_data) {
+++  const volatile gles2::cmds::LockSharedTexture& c =
+++      *static_cast<const volatile gles2::cmds::LockSharedTexture*>(cmd_data);
+++  void* handle = (void*)(c.shared_handle());
+++  external_texture_manager()->LockTexture(handle);
+++  return error::kNoError;
+++}
+++
+++error::Error GLES2DecoderPassthroughImpl::HandleUnlockSharedTexture(
+++    uint32_t immediate_data_size,
+++    const volatile void* cmd_data) {
+++  const volatile gles2::cmds::UnlockSharedTexture& c =
+++      *static_cast<const volatile gles2::cmds::UnlockSharedTexture*>(cmd_data);
+++  void* handle = (void*)(c.shared_handle());
+++  external_texture_manager()->UnlockTexture(handle);
+++  return error::kNoError;
+++}
+++
+++error::Error GLES2DecoderPassthroughImpl::HandleDeleteSharedTexture(
+++    uint32_t immediate_data_size,
+++    const volatile void* cmd_data) {
+++  const volatile gles2::cmds::DeleteSharedTexture& c =
+++      *static_cast<const volatile gles2::cmds::DeleteSharedTexture*>(cmd_data);
+++  void* handle = (void*)(c.shared_handle());
+++  external_texture_manager()->DeleteTexture(handle, nullptr);
+++  return error::kNoError;
+++}
+++
++ // static
++ GLES2DecoderPassthroughImpl::TextureTarget
++ GLES2DecoderPassthroughImpl::GLenumToTextureTarget(GLenum target) {
++diff --git gpu/command_buffer/service/gles2_cmd_decoder_passthrough.h gpu/command_buffer/service/gles2_cmd_decoder_passthrough.h
++index cd2ce1ce886f..d1dc5b6a8095 100644
++--- gpu/command_buffer/service/gles2_cmd_decoder_passthrough.h
+++++ gpu/command_buffer/service/gles2_cmd_decoder_passthrough.h
++@@ -42,6 +42,7 @@ namespace gles2 {
++
++ class ContextGroup;
++ class GPUTracer;
+++class ExternalTextureManager;
++
++ struct MappedBuffer {
++   GLsizeiptr size;
++@@ -332,6 +333,8 @@ class GPU_GLES2_EXPORT GLES2DecoderPassthroughImpl : public GLES2Decoder {
++
++   void SetOptionalExtensionsRequestedForTesting(bool request_extensions);
++
+++  ExternalTextureManager* external_texture_manager();
+++
++   void* GetScratchMemory(size_t size);
++
++   template <typename T>
++@@ -474,6 +477,8 @@ class GPU_GLES2_EXPORT GLES2DecoderPassthroughImpl : public GLES2Decoder {
++
++   std::unique_ptr<GpuFenceManager> gpu_fence_manager_;
++
+++  std::unique_ptr<ExternalTextureManager> external_texture_manager_;
+++
++   // State tracking of currently bound 2D textures (client IDs)
++   size_t active_texture_unit_;
++
++diff --git ui/compositor/compositor.cc ui/compositor/compositor.cc
++index 78fc2e0926e8..eea4b1a5b66d 100644
++--- ui/compositor/compositor.cc
+++++ ui/compositor/compositor.cc
++@@ -538,6 +538,16 @@ void Compositor::OnNeedsExternalBeginFrames(bool needs_begin_frames) {
++   needs_external_begin_frames_ = needs_begin_frames;
++ }
++
+++void* Compositor::GetSharedTexture() {
+++  if (context_factory_private_)
+++    return context_factory_private_->GetSharedTexture(this);
+++  return nullptr;
+++}
+++
+++void Compositor::EnableSharedTexture(bool enable) {
+++  shared_texture_enabled_ = enable;
+++}
+++
++ void Compositor::AddObserver(CompositorObserver* observer) {
++   observer_list_.AddObserver(observer);
++ }
++diff --git ui/compositor/compositor.h ui/compositor/compositor.h
++index eb250697ebd6..428596733c07 100644
++--- ui/compositor/compositor.h
+++++ ui/compositor/compositor.h
++@@ -147,6 +147,8 @@ class COMPOSITOR_EXPORT ContextFactoryPrivate {
++                                        const viz::BeginFrameArgs& args) = 0;
++
++   virtual void SetOutputIsSecure(Compositor* compositor, bool secure) = 0;
+++
+++  virtual void* GetSharedTexture(ui::Compositor* compositor) = 0;
++ };
++
++ // This class abstracts the creation of the 3D context for the compositor. It is
++@@ -348,6 +350,10 @@ class COMPOSITOR_EXPORT Compositor : public cc::LayerTreeHostClient,
++     return task_runner_;
++   }
++
+++  void* GetSharedTexture();
+++  void EnableSharedTexture(bool enable);
+++  bool shared_texture_enabled() const { return shared_texture_enabled_; }
+++
++   // Compositor does not own observers. It is the responsibility of the
++   // observer to remove itself when it is done observing.
++   void AddObserver(CompositorObserver* observer);
++@@ -480,6 +486,8 @@ class COMPOSITOR_EXPORT Compositor : public cc::LayerTreeHostClient,
++   ExternalBeginFrameClient* external_begin_frame_client_ = nullptr;
++   bool needs_external_begin_frames_ = false;
++
+++  bool shared_texture_enabled_ = false;
+++
++   const bool force_software_compositor_;
++
++   // The device scale factor of the monitor that this compositor is compositing
