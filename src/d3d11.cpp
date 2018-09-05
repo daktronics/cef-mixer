@@ -294,6 +294,40 @@ namespace d3d11 {
 		}
 	}
 
+	void Texture2D::copy_from(const void* buffer, uint32_t stride, uint32_t rows)
+	{
+		if (!buffer) {
+			return;
+		}
+
+		ID3D11DeviceContext* d3d11_ctx = (ID3D11DeviceContext*)(*ctx_);
+		assert(d3d11_ctx);
+
+		D3D11_MAPPED_SUBRESOURCE res;
+		auto const hr = d3d11_ctx->Map(texture_.get(), 0, D3D11_MAP_WRITE_DISCARD, 0, &res);
+		if (SUCCEEDED(hr))
+		{
+			if (rows == height())
+			{
+				if (res.RowPitch == stride) {
+					memcpy(res.pData, buffer, stride * rows);
+				}
+				else {
+					const uint8_t* src = (const uint8_t*)buffer;
+					uint8_t* dst = (uint8_t*)res.pData;
+					uint32_t cb = res.RowPitch < stride ? res.RowPitch : stride;
+					for (uint32_t y = 0; y < rows; ++y)
+					{
+						memcpy(dst, src, cb);
+						src += stride;
+						dst += res.RowPitch;					
+					}
+				}
+			}
+
+			d3d11_ctx->Unmap(texture_.get(), 0);	
+		}
+	}
 
 	Device::Device(ID3D11Device* pdev, ID3D11DeviceContext* pctx)
 		: device_(to_com_ptr(pdev))
@@ -582,7 +616,7 @@ namespace d3d11 {
 		D3D11_TEXTURE2D_DESC td;
 		td.ArraySize = 1;
 		td.BindFlags = D3D11_BIND_SHADER_RESOURCE;
-		td.CPUAccessFlags = 0;
+		td.CPUAccessFlags = data ? 0 : D3D11_CPU_ACCESS_WRITE;
 		td.Format = format;
 		td.Width = width;
 		td.Height = height;
@@ -590,7 +624,7 @@ namespace d3d11 {
 		td.MiscFlags = 0;
 		td.SampleDesc.Count = 1;
 		td.SampleDesc.Quality = 0;
-		td.Usage = D3D11_USAGE_DEFAULT;
+		td.Usage = data ? D3D11_USAGE_DEFAULT : D3D11_USAGE_DYNAMIC;
 
 		D3D11_SUBRESOURCE_DATA srd;
 		srd.pSysMem = data;

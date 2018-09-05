@@ -185,6 +185,8 @@ public:
 		// disable creation of a GPUCache/ folder on disk
 		command_line->AppendSwitch("disable-gpu-shader-disk-cache");
 		
+		//command_line->AppendSwitch("disable-accelerated-video-decode");
+				
 		// un-comment to show the built-in Chromium fps meter
 		//command_line->AppendSwitch("show-fps-counter");		
 
@@ -206,7 +208,7 @@ public:
 #if !defined(NDEBUG)
 		// ~RenderProcessHostImpl() complains about DCHECK(is_self_deleted_)
 		// when we run single process mode ... I haven't figured out how to resolve yet
-		command_line->AppendSwitch("single-process");
+		//command_line->AppendSwitch("single-process");
 #endif
 	}
 
@@ -274,9 +276,11 @@ class FrameBuffer
 {
 public:
 	FrameBuffer(shared_ptr<d3d11::Device> const& device)
-		: device_(device) {
+		: device_(device)
+		, dirty_(false)
+	{
 	}
-
+	
 	int32_t width() {
 		if (shared_buffer_) {
 			return shared_buffer_->width();
@@ -291,10 +295,34 @@ public:
 		return 0;
 	}
 
+	void on_paint(const void* buffer, uint32_t width, uint32_t height)
+	{
+		uint32_t stride = width * 4;
+		size_t cb = stride * height;
+
+		if (!shared_buffer_ ||
+			(shared_buffer_->width() != width) ||
+			(shared_buffer_->height() != height))
+		{
+			shared_buffer_ = device_->create_texture(
+				width, height, DXGI_FORMAT_B8G8R8A8_UNORM, nullptr, 0);
+			
+			sw_buffer_ = shared_ptr<uint8_t>((uint8_t*)malloc(cb), free);
+		}
+
+		if (sw_buffer_ && buffer) 
+		{
+			// todo: support dirty rect(s)
+			memcpy(sw_buffer_.get(), buffer, cb);		
+		}
+
+		dirty_ = true;
+	}
+
 	//
 	// called in response to Cef's OnAcceleratedPaint notification
 	//
-	void on_paint(void* shared_handle)
+	void on_gpu_paint(void* shared_handle)
 	{
 		// Note: we're not handling keyed mutexes yet
 
@@ -316,6 +344,8 @@ public:
 				log_message("could not open shared texture!");
 			}
 		}
+
+		dirty_ = true;
 	}
 
 	//
@@ -328,6 +358,18 @@ public:
 	shared_ptr<d3d11::Texture2D> swap(shared_ptr<d3d11::Context> const& ctx)
 	{
 		lock_guard<mutex> guard(lock_);
+
+		// using software buffer? just copy to texture
+		if (sw_buffer_ && shared_buffer_ && dirty_)
+		{
+			d3d11::ScopedBinder<d3d11::Texture2D> binder(ctx, shared_buffer_);			
+			shared_buffer_->copy_from(
+				sw_buffer_.get(), 
+				shared_buffer_->width() * 4, 
+				shared_buffer_->height());
+		}
+
+		dirty_ = false;
 		return shared_buffer_;
 	}
 
@@ -337,6 +379,8 @@ private:
 	atomic_bool abort_;
 	shared_ptr<d3d11::Texture2D> shared_buffer_;
 	std::shared_ptr<d3d11::Device> const device_;
+	shared_ptr<uint8_t> sw_buffer_;
+	bool dirty_;
 };
 
 //
@@ -374,13 +418,17 @@ public:
 	WebView(
 			string const& name,
 			shared_ptr<d3d11::Device> const& device,
-			int width, int height, bool send_begin_Frame)
+			int width, 
+			int height, 
+			bool use_shared_textures,
+			bool send_begin_Frame)
 		: name_(name)
 		, width_(width)
 		, height_(height)
 		, view_buffer_(make_shared<FrameBuffer>(device))
 		, popup_buffer_(make_shared<FrameBuffer>(device))
 		, needs_stats_update_(false)
+		, use_shared_textures_(use_shared_textures)
 		, send_begin_frame_(send_begin_Frame)
 		, device_(device)
 	{
@@ -390,6 +438,10 @@ public:
 
 	~WebView() {
 		close();
+	}
+
+	bool use_shared_textures() const {
+		return use_shared_textures_;
 	}
 
 	//
@@ -455,6 +507,42 @@ public:
 		int height) override
 	{
 		// this application doesn't support software rasterizing
+
+		if (type == PET_VIEW)
+		{
+			frame_++;
+			auto const now = time_now();
+			if (!fps_start_) {
+				fps_start_ = now;
+			}
+
+			if (view_buffer_) {
+				view_buffer_->on_paint(buffer, width, height);
+			}
+
+			if ((now - fps_start_) > 1000000)
+			{
+				auto const fps = frame_ / double((now - fps_start_) / 1000000.0);
+
+				auto const w = view_buffer_ ? view_buffer_->width() : 0;
+				auto const h = view_buffer_ ? view_buffer_->height() : 0;
+
+				log_message("html: OnAcceleratedPaint (%dx%d), fps: %3.2f\n", w, h, fps);
+
+				frame_ = 0;
+				fps_start_ = time_now();
+			}
+		}
+		else
+		{
+			// just update the popup frame ... we are only tracking 
+			// metrics for the view
+
+			if (popup_buffer_) {
+				popup_buffer_->on_paint(buffer, width, height);
+			}
+		}
+
 	}
 
 	void OnAcceleratedPaint(
@@ -472,7 +560,7 @@ public:
 			}
 			
 			if (view_buffer_) {
-				view_buffer_->on_paint((void*)share_handle);
+				view_buffer_->on_gpu_paint((void*)share_handle);
 			}
 			
 			if ((now - fps_start_) > 1000000)
@@ -494,7 +582,7 @@ public:
 			// metrics for the view
 
 			if (popup_buffer_) {
-				popup_buffer_->on_paint((void*)share_handle);
+				popup_buffer_->on_gpu_paint((void*)share_handle);
 			}
 		}
 	}
@@ -598,7 +686,7 @@ public:
 		}
 
 		window_info.SetAsWindowless(nullptr);
-		window_info.shared_texture_enabled = true;
+		window_info.shared_texture_enabled = use_shared_textures();
 		window_info.external_begin_frame_enabled = send_begin_frame_;
 
 		// pick some dimensions
@@ -610,6 +698,7 @@ public:
 			device_, 
 			width, 
 			height, 
+			use_shared_textures(),
 			send_begin_frame_));
 		
 		CefBrowserHost::CreateBrowser(
@@ -807,6 +896,7 @@ private:
 	mutex lock_;
 	CefRefPtr<CefBrowser> browser_;
 	bool needs_stats_update_;
+	bool use_shared_textures_;
 	bool send_begin_frame_;
 	
 	shared_ptr<Layer> popup_layer_;
@@ -822,7 +912,7 @@ public:
 		std::shared_ptr<d3d11::Device> const& device,
 		bool want_input,
 		CefRefPtr<WebView> const& view)
-		: Layer(device, want_input, true)
+		: Layer(device, want_input, view->use_shared_textures())
 		, view_(view) {
 	}
 
@@ -1108,7 +1198,9 @@ shared_ptr<Layer> create_web_layer(
 	}
 
 	CefRefPtr<WebView> view(new WebView(
-			name, device, width, height, window_info.external_begin_frame_enabled));
+			name, device, width, height, 
+			window_info.shared_texture_enabled, 
+			window_info.external_begin_frame_enabled));
 
 	CefBrowserHost::CreateBrowser(
 			window_info,

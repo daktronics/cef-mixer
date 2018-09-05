@@ -148,6 +148,8 @@ namespace d3d11 {
 		void* share_handle() const;
 
 		void copy_from(std::shared_ptr<Texture2D> const&);
+		
+		void copy_from(const void* buffer, uint32_t stride, uint32_t rows);
 
 	private:
 
