@@ -587,10 +587,9 @@ public:
 		}
 	}
 
-	bool GetViewRect(CefRefPtr<CefBrowser> /*browser*/, CefRect& rect) override
+	void GetViewRect(CefRefPtr<CefBrowser> /*browser*/, CefRect& rect) override
 	{
 		rect.Set(0, 0, width_, height_);
-		return true;
 	}
 
 	void OnAfterCreated(CefRefPtr<CefBrowser> browser) override
