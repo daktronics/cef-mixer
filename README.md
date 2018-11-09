@@ -134,7 +134,7 @@ info.shared_texture_enabled = true;
 info.external_begin_frame_enabled = true;
 ```
 
-At an interval suitable for your application, make the following call (see [hweb_layer.cpp](https://github.com/daktronics/cef-mixer/blob/master/src/web_layer.cpp) for a full example) :
+At an interval suitable for your application, make the following call (see [web_layer.cpp](https://github.com/daktronics/cef-mixer/blob/master/src/web_layer.cpp) for a full example) :
 
 ```c
 browser->GetHost()->SendExternalBeginFrame();
