@@ -1,144 +1,76 @@
 diff --git a/libcef/browser/osr/render_widget_host_view_osr.cc b/libcef/browser/osr/render_widget_host_view_osr.cc
-index 58fdead4..284a7378 100644
+index db95b798..9ff43b66 100644
 --- a/libcef/browser/osr/render_widget_host_view_osr.cc
 +++ b/libcef/browser/osr/render_widget_host_view_osr.cc
-@@ -48,10 +48,6 @@
+@@ -81,17 +81,15 @@ class CefCompositorFrameSinkClient
  
- namespace {
+   void DidReceiveCompositorFrameAck(
+       const std::vector<viz::ReturnedResource>& resources) override {
++    if (render_widget_host_view_) {
++      render_widget_host_view_->OnPresentCompositorFrame();
++    }
+     forward_->DidReceiveCompositorFrameAck(resources);
+   }
  
--// The maximum number of damage rects to cache for outstanding frame requests
--// (for OnAcceleratedPaint).
--const size_t kMaxDamageRects = 10;
--
- const float kDefaultScaleFactor = 1.0;
- 
- // The maximum number of retry counts if frame capture fails.
-@@ -72,43 +68,6 @@ static content::ScreenInfo ScreenInfoFrom(const CefScreenInfo& src) {
-   return screenInfo;
- }
- 
--class CefCompositorFrameSinkClient
--    : public viz::mojom::CompositorFrameSinkClient {
-- public:
--  CefCompositorFrameSinkClient(viz::mojom::CompositorFrameSinkClient* forward,
--                               CefRenderWidgetHostViewOSR* rwhv)
--      : forward_(forward), render_widget_host_view_(rwhv) {}
--
--  void DidReceiveCompositorFrameAck(
--      const std::vector<viz::ReturnedResource>& resources) override {
--    forward_->DidReceiveCompositorFrameAck(resources);
--  }
--
--  void OnBeginFrame(const viz::BeginFrameArgs& args,
--                    const base::flat_map<uint32_t, gfx::PresentationFeedback>&
--                        feedbacks) override {
+   void OnBeginFrame(const viz::BeginFrameArgs& args,
+                     const base::flat_map<uint32_t, gfx::PresentationFeedback>&
+                         feedbacks) override {
 -    if (render_widget_host_view_) {
 -      for (const auto& pair : feedbacks) {
 -        render_widget_host_view_->OnPresentCompositorFrame(pair.first);
 -      }
 -    }
--    forward_->OnBeginFrame(args, feedbacks);
--  }
--
--  void OnBeginFramePausedChanged(bool paused) override {
--    forward_->OnBeginFramePausedChanged(paused);
--  }
--
--  void ReclaimResources(
--      const std::vector<viz::ReturnedResource>& resources) override {
--    forward_->ReclaimResources(resources);
--  }
--
-- private:
--  viz::mojom::CompositorFrameSinkClient* const forward_;
--  CefRenderWidgetHostViewOSR* const render_widget_host_view_;
--};
--
- #if !defined(OS_MACOSX)
+     forward_->OnBeginFrame(args, feedbacks);
+   }
  
- class CefDelegatedFrameHostClient : public content::DelegatedFrameHostClient {
-@@ -328,6 +287,7 @@ CefRenderWidgetHostViewOSR::CefRenderWidgetHostViewOSR(
-       is_destroyed_(false),
-       is_scroll_offset_changed_pending_(false),
-       mouse_wheel_phase_handler_(this),
-+      renderer_compositor_frame_sink_(NULL),
-       weak_ptr_factory_(this) {
-   DCHECK(render_widget_host_);
-   DCHECK(!render_widget_host_->GetView());
-@@ -594,16 +554,15 @@ void CefRenderWidgetHostViewOSR::TakeFallbackContentFrom(
- 
- void CefRenderWidgetHostViewOSR::DidCreateNewRendererCompositorFrameSink(
-     viz::mojom::CompositorFrameSinkClient* renderer_compositor_frame_sink) {
--  renderer_compositor_frame_sink_.reset(
--      new CefCompositorFrameSinkClient(renderer_compositor_frame_sink, this));
-+  renderer_compositor_frame_sink_ = renderer_compositor_frame_sink;
-   if (GetDelegatedFrameHost()) {
-     GetDelegatedFrameHost()->DidCreateNewRendererCompositorFrameSink(
--        renderer_compositor_frame_sink_.get());
-+        renderer_compositor_frame_sink);
+@@ -602,8 +600,7 @@ void CefRenderWidgetHostViewOSR::DidCreateNewRendererCompositorFrameSink(
    }
  }
  
- void CefRenderWidgetHostViewOSR::OnPresentCompositorFrame(
+-void CefRenderWidgetHostViewOSR::OnPresentCompositorFrame(
 -    uint32_t presentation_token) {
-+    const gfx::Rect& damage) {
++void CefRenderWidgetHostViewOSR::OnPresentCompositorFrame() {
    // Is Chromium rendering to a shared texture?
    void* shared_texture = nullptr;
    ui::Compositor* compositor = GetCompositor();
-@@ -617,22 +576,8 @@ void CefRenderWidgetHostViewOSR::OnPresentCompositorFrame(
-     CHECK(handler);
+@@ -623,10 +620,13 @@ void CefRenderWidgetHostViewOSR::OnPresentCompositorFrame(
+       // view size for a full redraw.
+       base::AutoLock lock_scope(damage_rect_lock_);
  
-     CefRenderHandler::RectList rcList;
--
--    {
--      // Find the corresponding damage rect. If there isn't one pass the entire
--      // view size for a full redraw.
--      base::AutoLock lock_scope(damage_rect_lock_);
--
--      gfx::Rect damage;
++      // TODO: in the future we need to correlate the presentation
++      // notification with the sequence number from BeginFrame
+       gfx::Rect damage;
 -      auto const i = damage_rects_.find(presentation_token);
--      if (i != damage_rects_.end()) {
--        damage = i->second;
--      } else {
--        damage = GetViewBounds();
--      }
--      rcList.push_back(
--          CefRect(damage.x(), damage.y(), damage.width(), damage.height()));
--    }
-+    rcList.push_back(
-+        CefRect(damage.x(), damage.y(), damage.width(), damage.height()));
- 
-     handler->OnAcceleratedPaint(browser_impl_.get(),
-                                 IsPopupWidget() ? PET_POPUP : PET_VIEW, rcList,
-@@ -640,20 +585,10 @@ void CefRenderWidgetHostViewOSR::OnPresentCompositorFrame(
++      auto const i = damage_rects_.begin();
+       if (i != damage_rects_.end()) {
+         damage = i->second;
++        damage_rects_.erase(i);
+       } else {
+         damage = GetViewBounds();
+       }
+@@ -640,7 +640,7 @@ void CefRenderWidgetHostViewOSR::OnPresentCompositorFrame(
    }
  }
  
 -void CefRenderWidgetHostViewOSR::AddDamageRect(uint32_t presentation_token,
--                                               const gfx::Rect& rect) {
--  // Associate the given damage rect with the presentation token.
--  // For OnAcceleratedPaint we'll lookup the corresponding damage area based on
--  // the frame token which is passed back to OnPresentCompositorFrame.
--  base::AutoLock lock_scope(damage_rect_lock_);
--
--  // We assume our presentation_token is a counter. Since we're using an ordered
--  // map we can enforce a max size and remove oldest from the front. Worst case,
--  // if a damage rect isn't associated, we can simply pass the entire view size.
--  while (damage_rects_.size() >= kMaxDamageRects) {
--    damage_rects_.erase(damage_rects_.begin());
--  }
++void CefRenderWidgetHostViewOSR::AddDamageRect(uint32_t sequence,
+                                                const gfx::Rect& rect) {
+   // Associate the given damage rect with the presentation token.
+   // For OnAcceleratedPaint we'll lookup the corresponding damage area based on
+@@ -653,7 +653,7 @@ void CefRenderWidgetHostViewOSR::AddDamageRect(uint32_t presentation_token,
+   while (damage_rects_.size() >= kMaxDamageRects) {
+     damage_rects_.erase(damage_rects_.begin());
+   }
 -  damage_rects_[presentation_token] = rect;
-+void CefRenderWidgetHostViewOSR::DidPresentCompositorFrame(
-+    const gfx::Rect& damage,
-+    const gfx::PresentationFeedback& feedback) {
-+  OnPresentCompositorFrame(damage);
++  damage_rects_[sequence] = rect;
  }
  
  void CefRenderWidgetHostViewOSR::SubmitCompositorFrame(
-@@ -718,13 +653,9 @@ void CefRenderWidgetHostViewOSR::SubmitCompositorFrame(
+@@ -717,14 +717,8 @@ void CefRenderWidgetHostViewOSR::SubmitCompositorFrame(
+       damage_rect.Intersect(gfx::Rect(frame_size));
  
        if (shared_texture) {
-         // Indicate that we want feedback every frame.
+-        // Indicate that we want feedback every frame.
 -        if (!++presentation_token_)
 -          ++presentation_token_;
 -
@@ -146,14 +78,13 @@ index 58fdead4..284a7378 100644
 -
 -        frame.metadata.frame_token = presentation_token_;
 -        frame.metadata.request_presentation_feedback = true;
-+        compositor->RequestPresentationTimeForNextFrame(base::BindOnce(
-+            &CefRenderWidgetHostViewOSR::DidPresentCompositorFrame,
-+            base::Unretained(this), damage_rect));
++        AddDamageRect(frame.metadata.begin_frame_ack.sequence_number,
++                      damage_rect);
        }
  
        // We would normally call BrowserCompositorMac::SubmitCompositorFrame on
 diff --git a/libcef/browser/osr/render_widget_host_view_osr.h b/libcef/browser/osr/render_widget_host_view_osr.h
-index 2d21ff0f..dd6c49e9 100644
+index 2d21ff0f..6a1ddead 100644
 --- a/libcef/browser/osr/render_widget_host_view_osr.h
 +++ b/libcef/browser/osr/render_widget_host_view_osr.h
 @@ -267,7 +267,7 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
@@ -161,37 +92,24 @@ index 2d21ff0f..dd6c49e9 100644
  #endif
  
 -  void OnPresentCompositorFrame(uint32_t presentation_token);
-+  void OnPresentCompositorFrame(const gfx::Rect& damage_rect);
++  void OnPresentCompositorFrame();
  
   private:
    content::DelegatedFrameHost* GetDelegatedFrameHost() const;
-@@ -301,7 +301,8 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+@@ -301,7 +301,7 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
  
    viz::FrameSinkId AllocateFrameSinkId(bool is_guest_view_hack);
  
 -  void AddDamageRect(uint32_t presentation_token, const gfx::Rect& rect);
-+  void DidPresentCompositorFrame(const gfx::Rect& rect,
-+                                 const gfx::PresentationFeedback& feedback);
++  void AddDamageRect(uint32_t sequence, const gfx::Rect& rect);
  
    // Applies background color without notifying the RenderWidget about
    // opaqueness changes.
-@@ -394,9 +395,6 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
+@@ -394,7 +394,6 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
    bool is_showing_;
    bool is_destroyed_;
    gfx::Rect popup_position_;
 -  uint32_t presentation_token_ = 0;
--  base::Lock damage_rect_lock_;
--  std::map<uint32_t, gfx::Rect> damage_rects_;
+   base::Lock damage_rect_lock_;
+   std::map<uint32_t, gfx::Rect> damage_rects_;
  
-   // The last scroll offset of the view.
-   gfx::Vector2dF last_scroll_offset_;
-@@ -404,8 +402,7 @@ class CefRenderWidgetHostViewOSR : public content::RenderWidgetHostViewBase,
- 
-   content::MouseWheelPhaseHandler mouse_wheel_phase_handler_;
- 
--  std::unique_ptr<viz::mojom::CompositorFrameSinkClient>
--      renderer_compositor_frame_sink_;
-+  viz::mojom::CompositorFrameSinkClient* renderer_compositor_frame_sink_;
- 
-   // Latest capture sequence number which is incremented when the caller
-   // requests surfaces be synchronized via
